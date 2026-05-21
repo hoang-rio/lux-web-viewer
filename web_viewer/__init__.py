@@ -361,8 +361,16 @@ async def broadcast_sse(data: str):
     inverter_id = None
     try:
         payload = json.loads(data)
-        inverter_payload = payload.get("inverter_data") or {}
-        inverter_id = inverter_payload.get("_inverter_id")
+        if "inverter_data" in payload:
+            inverter_payload = payload.get("inverter_data") or {}
+            inverter_id = inverter_payload.get("_inverter_id")
+            if not inverter_id:
+                inverter_id = inverter_payload.get("serial") or inverter_payload.get("dongle_serial")
+        elif payload.get("event") == "new_notification":
+            inverter_id = payload.get("data", {}).get("inverter_id")
+
+        if inverter_id:
+            inverter_id = str(inverter_id)
     except Exception:
         inverter_id = None
 
