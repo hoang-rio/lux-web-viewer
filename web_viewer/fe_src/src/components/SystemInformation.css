@@ -224,7 +224,7 @@
 .consumption {
     position: relative;
     left: -39px;
-    top: -45px;
+    margin-top: -45px;
 }
 
 .eps {
@@ -536,7 +536,7 @@
     }
 
     .consumption {
-        top: -73px;
+        margin-top: -73px;
         left: -55px;
     }
 
@@ -641,7 +641,7 @@
 
     .consumption {
         left: -38px;
-        top: -55px;
+        margin-top: -55px;
     }
 
 
