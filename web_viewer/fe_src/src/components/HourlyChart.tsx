@@ -338,7 +338,7 @@ const HourlyChart = forwardRef(
                       formatter(seriesName, opts) {
                         if (seriesName === BATTERY_SERIE_NAME) {
                           const batteryValue =
-                            opts?.series[1][opts.dataPointIndex];
+                            opts?.series?.[1][opts.dataPointIndex];
                           if (batteryValue === 0) {
                             return `${seriesName}:`;
                           }
@@ -352,7 +352,7 @@ const HourlyChart = forwardRef(
                           });
                         }
                         if (seriesName === GRID_SERIE_NAME) {
-                          const gridValue = opts?.series[2][opts.dataPointIndex];
+                          const gridValue = opts?.series?.[2][opts.dataPointIndex];
                           if (gridValue === 0) {
                             return `${seriesName}:`;
                           }
