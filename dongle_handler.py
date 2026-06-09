@@ -127,7 +127,7 @@ class Dongle():
         """Get requested input data from dongle based on configuration."""
         import time
         try:
-            self.__logger.info("Start get dongle input")
+            self.__logger.debug("Start get dongle input")
             
             if self.__client is None:
                 self.__logger.info(
@@ -159,14 +159,19 @@ class Dongle():
                     # Wait up to 2 seconds for a response
                     self.__client.settimeout(2.0)
                     data = self.__client.recv(1024)
-                    self.__logger.debug("%s response: %s", label, list(data))
+                    self.__logger.debug(
+                        "%s response: %d bytes (first 8: %s)",
+                        label,
+                        len(data),
+                        data[:8].hex() if data else "",
+                    )
                     if data and data[0] != 0 and data[7] == TCP_FUNCTION_TRANSLATE:
                         # Use auto-detection to ensure we parse the correct register block
                         # even if packets arrive out of order or are delayed.
                         parsed_data = Dongle.read_input(list(data))
                         if parsed_data:
                             self.__cached_data.update(parsed_data)
-                            self.__logger.info("Parsed register block successfully from %s response", label)
+                            self.__logger.debug("Parsed register block from %s response", label)
                 except (TimeoutError, socket.timeout):
                     self.__logger.warning("%s timeout, continuing...", label)
                 except Exception as e:
@@ -186,11 +191,15 @@ class Dongle():
                 result['deviceTime'] = datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
-                self.__logger.info("Finish get dongle input")
+                self.__logger.info(
+                    "Finish get dongle input (soc=%s%%, p_pv=%sW)",
+                    result.get("soc", "?"),
+                    result.get("p_pv", "?"),
+                )
                 if "v_bat" in result and (result["v_bat"] < 40 or result["v_bat"] > 58):
                     self.__logger.warning(
-                        "v_bat should between 40V and 58V. Inverter may not work properly. Parsed data: %s",
-                        result,
+                        "v_bat out of range: %.1fV (expected 40-58V)",
+                        result["v_bat"],
                     )
                 return result
             else:
