@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional
 import dongle_handler
 import time
@@ -220,10 +221,10 @@ class DongleServer:
                         break
 
                     self.__logger.debug(
-                        "Received %d bytes from %s: %s",
+                        "Received %d bytes from %s (first 8: %s)",
                         len(data),
                         client_addr,
-                        list(data)
+                        data[:8].hex(),
                     )
 
                     # Parse the received data
@@ -247,8 +248,10 @@ class DongleServer:
                         if read_mode == dongle_handler.READ_INPUT_MODE_INPUT1_ONLY:
                             await self.__enqueue_inverter_data(dict(cached_data), client_addr)
                             self.__logger.info(
-                                "Successfully parsed data from %s",
-                                client_addr
+                                "ReadInput complete from %s (soc=%s%%, p_pv=%sW)",
+                                client_addr,
+                                parsed_data.get("soc", "?"),
+                                parsed_data.get("p_pv", "?"),
                             )
                             cycle_complete = True
                             # Update plan for next cycle
@@ -258,7 +261,7 @@ class DongleServer:
                             register = extract_register(raw_data)
                             if register is not None:
                                 all_mode_received_registers.add(register)
-                                self.__logger.info(
+                                self.__logger.debug(
                                     "Parsed register=%s from %s (%s/%s)",
                                     register,
                                     client_addr,
@@ -267,15 +270,16 @@ class DongleServer:
                                 )
                                 if all_mode_received_registers.issuperset(set(registers)):
                                     # Always update the timestamp to now for the returned data
-                                    from datetime import datetime
                                     ready_data = dict(cached_data)
                                     ready_data['deviceTime'] = datetime.now().strftime(
                                         "%Y-%m-%d %H:%M:%S"
                                     )
                                     await self.__enqueue_inverter_data(ready_data, client_addr)
-                                    self.__logger.debug(
-                                        "Merged ReadInput data ready from %s",
+                                    self.__logger.info(
+                                        "ReadInput complete (all) from %s (soc=%s%%, p_pv=%sW)",
                                         client_addr,
+                                        ready_data.get("soc", "?"),
+                                        ready_data.get("p_pv", "?"),
                                     )
                                     all_mode_received_registers.clear()
                                     cycle_complete = True
@@ -411,26 +415,65 @@ class DongleServer:
             
             if parsed_data is not None:
                 # Add device timestamp
-                from datetime import datetime
                 parsed_data['deviceTime'] = datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
 
-                # Log input type if available
-                input_type = parsed_data.get("input_type", "input1")
-                self.__logger.debug(
-                    "Successfully parsed %s data from dongle",
-                    input_type
-                )
-                self.__logger.debug("Parsed data: %s", parsed_data)
+                # Log parsed type + a handful of key metrics specific to the register block type
+                if parsed_data.get("input_type") == "all":
+                    self.__logger.debug(
+                        "Parsed ReadInputAll: soc=%s%% v_bat=%sV p_pv=%sW status=%s e_pv_all=%skWh t_inner=%s°C v_gen=%sV",
+                        parsed_data.get("soc", "-"),
+                        parsed_data.get("v_bat", "-"),
+                        parsed_data.get("p_pv", "-"),
+                        parsed_data.get("status_text", "-"),
+                        parsed_data.get("e_pv_all", "-"),
+                        parsed_data.get("t_inner", "-"),
+                        parsed_data.get("v_gen", "-"),
+                    )
+                elif "soc" in parsed_data:
+                    self.__logger.debug(
+                        "Parsed ReadInput1: soc=%s%% v_bat=%sV p_pv=%sW status=%s",
+                        parsed_data.get("soc", "-"),
+                        parsed_data.get("v_bat", "-"),
+                        parsed_data.get("p_pv", "-"),
+                        parsed_data.get("status_text", "-"),
+                    )
+                elif "e_pv_all" in parsed_data:
+                    self.__logger.debug(
+                        "Parsed ReadInput2: e_pv_all=%skWh t_inner=%s°C runtime=%ss",
+                        parsed_data.get("e_pv_all", "-"),
+                        parsed_data.get("t_inner", "-"),
+                        parsed_data.get("runtime", "-"),
+                    )
+                elif "bat_capacity" in parsed_data:
+                    self.__logger.debug(
+                        "Parsed ReadInput3: bat_capacity=%sAh bat_current=%sA cycle_count=%s vbat_inv=%sV",
+                        parsed_data.get("bat_capacity", "-"),
+                        parsed_data.get("bat_current", "-"),
+                        parsed_data.get("cycle_count", "-"),
+                        parsed_data.get("vbat_inv", "-"),
+                    )
+                elif "v_gen" in parsed_data:
+                    self.__logger.debug(
+                        "Parsed ReadInput4: v_gen=%sV p_gen=%sW p_eps_l1=%sW p_eps_l2=%sW",
+                        parsed_data.get("v_gen", "-"),
+                        parsed_data.get("p_gen", "-"),
+                        parsed_data.get("p_eps_l1", "-"),
+                        parsed_data.get("p_eps_l2", "-"),
+                    )
+                else:
+                    self.__logger.debug(
+                        "Parsed unknown ReadInput block: %s",
+                        list(parsed_data.keys()),
+                    )
 
                 # Validate battery voltage if present
                 if "v_bat" in parsed_data:
                     if parsed_data["v_bat"] < 40 or parsed_data["v_bat"] > 58:
                         self.__logger.warning(
-                            "v_bat should be between 40V and 58V. "
-                            "Inverter may not work properly. Parsed data: %s",
-                            parsed_data
+                            "v_bat out of range: %.1fV (expected 40-58V)",
+                            parsed_data["v_bat"],
                         )
 
                 return parsed_data
@@ -448,7 +491,6 @@ class DongleServer:
                 if data_len == 117 and register == 0:
                     parsed_data = dongle_handler.Dongle.read_input1(data)
                     if parsed_data is not None:
-                        from datetime import datetime
                         parsed_data['deviceTime'] = datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
                         )
