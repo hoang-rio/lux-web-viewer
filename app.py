@@ -137,7 +137,6 @@ def dectect_abnormal_usage(db_connection: sqlite3.Connection, fcm_service: FCM):
 
 
 dectect_off_grid_warning_skip_check_count = 0
-last_battery_full_notify_date = None
 def dectect_off_grid_warning(is_grid_connected: bool, pv_power: int, eps_power: int, soc: int, fcm_service: FCM):
     if not settings.get_off_grid_warning_enabled() or is_grid_connected:
         return
@@ -176,24 +175,21 @@ def dectect_off_grid_warning(is_grid_connected: bool, pv_power: int, eps_power: 
 def detect_battery_full(soc: int, fcm_service: FCM, db_connection: sqlite3.Connection):
     if not settings.get_battery_full_notify_enabled():
         return
-    global last_battery_full_notify_date
     now = datetime.now()
     today = now.date()
 
-    # Load from DB if not already loaded (e.g. after restart)
-    if last_battery_full_notify_date is None:
-        last_date_str = settings.get_setting("LAST_BATTERY_FULL_NOTIFY_DATE")
-        if last_date_str:
-            try:
-                last_battery_full_notify_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                pass
+    last_date_str = settings.get_setting("LAST_BATTERY_FULL_NOTIFY_DATE")
+    last_notified_date = None
+    if last_date_str:
+        try:
+            last_notified_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            pass
 
-    if soc == 100 and (last_battery_full_notify_date is None or last_battery_full_notify_date != today):
+    if soc == 100 and (last_notified_date is None or last_notified_date != today):
         logger.info("_________Battery full detected with soc: %s%%_________", soc)
         body = settings.get_battery_full_notify_body()
         fcm_service.battery_full_notify(body)
-        last_battery_full_notify_date = today
         if db_connection:
             settings.save_setting("LAST_BATTERY_FULL_NOTIFY_DATE", str(today), db_connection)
 
