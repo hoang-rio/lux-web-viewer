@@ -16,6 +16,7 @@ const SettingsPopover = lazy(() => import("./SettingsPopover"));
 interface Props {
   inverterData: IInverterData;
   isSSEConnected: boolean;
+  isOffline: boolean;
   onReconnect: () => void;
   // Changed to accept an INotificationData object or null
   newNotification?: INotificationData | null;
@@ -24,6 +25,7 @@ interface Props {
 function SystemInformation({
   inverterData,
   isSSEConnected,
+  isOffline,
   onReconnect,
   newNotification,
 }: Props) {
@@ -169,8 +171,37 @@ function SystemInformation({
     setShowNotifications((prev) => !prev);
   }, []);
 
+  const effectiveSSEConnected = useMemo(() => {
+    return isSSEConnected && !isOffline;
+  }, [isOffline, isSSEConnected]);
+
+  const displayInverterData = useMemo(() => {
+    if (!isOffline && isSSEConnected) return inverterData;
+    return {
+      ...inverterData,
+      p_pv: 0,
+      p_pv_1: 0,
+      p_pv_2: 0,
+      v_pv_1: 0,
+      v_pv_2: 0,
+      p_discharge: 0,
+      p_charge: 0,
+      soc: 0,
+      v_bat: 0,
+      p_inv: 0,
+      p_rec: 0,
+      vacr: 0,
+      vacs: 0,
+      vact: 0,
+      p_to_user: 0,
+      p_to_grid: 0,
+      fac: 0,
+      p_eps: 0,
+    };
+  }, [isOffline, isSSEConnected, inverterData]);
+
   const status = useMemo(() => {
-    if (!isSSEConnected) {
+    if (isOffline || !isSSEConnected) {
       return "offline";
     }
     if (inverterData.status === 1) {
@@ -186,6 +217,7 @@ function SystemInformation({
     }
     return "normal";
   }, [
+    isOffline,
     isSSEConnected,
     inverterData.status,
     inverterData.internal_fault,
@@ -257,8 +289,8 @@ function SystemInformation({
           <div className="system-graph">
             <div className="system-status row">
               <div
-                className="system-status-display"
-                title={inverterData.status_text}
+                className={`system-status-display ${status}`}
+                title={status === "offline" ? t("offline") : inverterData.status_text}
               >
                 <div
                   className={`system-status-icon ${status}`}
@@ -279,34 +311,34 @@ function SystemInformation({
             <div className="row">
               <div className="flex-1"></div>
               <SolarPV
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
               <div className="flex-1"></div>
             </div>
             <div className="row">
               <Battery
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
               <Inverter
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
               <Grid
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
             </div>
             <div className="row">
               <div className="flex-1"></div>
               <EPS
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
               <Consumption
-                inverterData={inverterData}
-                isSSEConnected={isSSEConnected}
+                inverterData={displayInverterData}
+                isSSEConnected={effectiveSSEConnected}
               />
             </div>
           </div>

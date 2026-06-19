@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, lazy } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, lazy } from "react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
 import { IUpdateChart, IInverterData, INotificationData } from "./Intefaces";
@@ -12,6 +12,16 @@ const HourlyChart = lazy(() => import("./components/HourlyChart"));
 const EnergyChart = lazy(() => import("./components/EnergyChart"));
 
 const MAX_RECONNECT_COUNT = 5;
+const INVERTER_OFFLINE_TIMEOUT_MS = 20 * 60 * 1000;
+
+function toTimestamp(value?: string | null): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -23,10 +33,34 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const isFetchingRef = useRef(false);
   const deviceTimeRef = useRef<string>("");
+  const isOfflineByDeviceTimeRef = useRef(false);
 
   // Changed to hold notification object or null
   const [newNotification, setNewNotification] =
     useState<INotificationData | null>(null);
+
+  const isOfflineByDeviceTime = useMemo(() => {
+    const deviceTs = toTimestamp(inverterData?.deviceTime);
+    return !(Boolean(deviceTs) && Date.now() - deviceTs <= INVERTER_OFFLINE_TIMEOUT_MS);
+  }, [inverterData?.deviceTime, isSSEConnected, toTimestamp]);
+
+  useEffect(() => {
+    isOfflineByDeviceTimeRef.current = isOfflineByDeviceTime;
+  }, [isOfflineByDeviceTime]);
+
+  const setConnectedTitle = useCallback(() => {
+    if (document.hidden || isOfflineByDeviceTimeRef.current) {
+      return;
+    }
+    const currentDeviceTime = deviceTimeRef.current;
+    if (currentDeviceTime) {
+      document.title = `[${currentDeviceTime}] ${i18n.t("webTitle")}`;
+    }
+  }, [i18n]);
+
+  const setOfflineTitle = useCallback(() => {
+    document.title = `[${i18n.t("offline")}] ${i18n.t("webTitle")}`;
+  }, [i18n]);
 
   const connectSSE = useCallback(() => {
     if (eventSourceRef.current) {
@@ -39,9 +73,7 @@ function App() {
     eventSource.onopen = () => {
       reconnectCountRef.current = 0;
       logUtil.log(i18n.t("sse.connected"));
-      if (deviceTimeRef.current) {
-        document.title = `[${deviceTimeRef.current}] ${i18n.t("webTitle")}`;
-      }
+      setConnectedTitle();
       setIsSSEConnected(true);
     };
 
@@ -57,7 +89,7 @@ function App() {
     };
 
     eventSource.onerror = (event) => {
-      document.title = `[${i18n.t("offline")}] ${i18n.t("webTitle")}`;
+      setOfflineTitle();
       setIsSSEConnected(false);
       logUtil.error(i18n.t("sse.error"), event);
       eventSource.close();
@@ -76,7 +108,7 @@ function App() {
 
   const closeSSE = useCallback(() => {
     logUtil.log(i18n.t("sse.closing"));
-    document.title = `[${i18n.t("offline")}] ${i18n.t("webTitle")}`;
+    setOfflineTitle();
     setIsSSEConnected(false);
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -138,8 +170,8 @@ function App() {
     if (!inverterData?.deviceTime) return;
     const deviceTimeOnly = inverterData.deviceTime.split(" ")[1];
     deviceTimeRef.current = deviceTimeOnly;
-    document.title = `[${deviceTimeOnly}] ${t("webTitle")}`;
-  }, [inverterData?.deviceTime, t]);
+    setConnectedTitle();
+  }, [inverterData?.deviceTime, setConnectedTitle, t]);
 
   if (isLoading) {
     return (
@@ -159,6 +191,7 @@ function App() {
         <SystemInformation
           inverterData={inverterData}
           isSSEConnected={isSSEConnected}
+          isOffline={isOfflineByDeviceTime}
           onReconnect={connectSSE}
           newNotification={newNotification}
         />
