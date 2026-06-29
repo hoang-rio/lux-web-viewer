@@ -20,7 +20,7 @@ env:
   SSH_KEY_FILE_DIR: .keys
   SSH_KEY_FILE_PATH: .keys/deploy_key.pem
   BUILD_FE: ${{ inputs.force_build_fe || false }}
-  NODE_VERSION: 24.15.0
+  NODE_VERSION: 24.18.0
 
 jobs:
   ssh-deploy:
