@@ -1,0 +1,410 @@
+.trigger-dashboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.trigger-dashboard {
+    background: #fff;
+    border-radius: 8px;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.trigger-dashboard-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #ddd;
+    position: relative;
+}
+
+.trigger-dashboard-header h3 {
+    margin: 0;
+    flex: 1;
+    font-size: 16px;
+}
+
+.trigger-dashboard-header .close-popover {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+    padding: 0 4px;
+}
+
+.trigger-dashboard-header .close-popover:hover {
+    color: #000;
+}
+
+.trigger-message {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+}
+
+.trigger-message.success { color: green; }
+.trigger-message.error { color: red; }
+
+.trigger-tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    padding: 0 16px;
+}
+
+.trigger-tabs button {
+    flex: 1;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+}
+
+.trigger-tabs button.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+.trigger-tabs button:hover { color: #0056b3; }
+
+.trigger-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+
+.devices-tab .devices-actions { margin-bottom: 12px; }
+
+.scan-btn {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.scan-btn:disabled { background-color: #ccc; }
+
+.devices-section { margin-bottom: 16px; }
+
+.devices-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.device-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: #fafafa;
+}
+
+.device-card.discovered {
+    background: #f0f7ff;
+    border-color: #b3d4fc;
+}
+
+.device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.device-name { font-weight: bold; font-size: 14px; }
+.device-detail { font-size: 12px; color: #666; }
+
+.device-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.register-btn,
+.test-btn,
+.delete-btn,
+.edit-btn {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    background: #fff;
+}
+
+.register-btn { background: #28a745; color: white; border-color: #28a745; }
+.test-btn.on { background: #28a745; color: white; border-color: #28a745; }
+.test-btn.off { background: #dc3545; color: white; border-color: #dc3545; }
+
+.delete-btn { color: #dc3545; border-color: #dc3545; }
+.delete-btn:hover { background: #dc3545; color: white; }
+
+.no-records {
+    text-align: center;
+    color: #888;
+    padding: 24px 0;
+    font-size: 14px;
+}
+
+.triggers-tab .triggers-actions { margin-bottom: 12px; }
+
+.add-trigger-btn {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.trigger-card {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.trigger-card.enabled { border-left: 3px solid #28a745; }
+.trigger-card.disabled { border-left: 3px solid #ccc; opacity: 0.7; }
+
+.trigger-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+}
+
+.trigger-name { font-weight: bold; font-size: 14px; }
+
+.trigger-toggle {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.trigger-toggle input { opacity: 0; width: 0; height: 0; }
+
+.trigger-toggle-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: 0.2s;
+}
+
+.trigger-toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 14px; width: 14px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.trigger-toggle input:checked + .trigger-toggle-slider { background-color: #28a745; }
+.trigger-toggle input:checked + .trigger-toggle-slider::before { transform: translateX(16px); }
+
+.trigger-details { padding: 10px 12px; }
+.trigger-detail { font-size: 13px; margin-bottom: 4px; color: #444; }
+.trigger-detail strong { color: #333; }
+
+.trigger-actions {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid #eee;
+}
+
+.edit-btn { background: #fff; color: #007bff; border-color: #007bff; }
+
+.trigger-form { padding: 16px; overflow-y: auto; flex: 1; }
+
+.form-group { margin-bottom: 12px; }
+
+.form-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group textarea { resize: vertical; font-family: inherit; }
+
+.form-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.form-section h4 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+
+.day-picker { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.day-btn {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.day-btn.selected { background: #007bff; color: white; border-color: #007bff; }
+
+.condition-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.condition-row select {
+    padding: 5px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.condition-value {
+    width: 80px;
+    padding: 5px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.add-condition-btn {
+    padding: 4px 10px;
+    border: 1px dashed #007bff;
+    border-radius: 4px;
+    background: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    margin-top: 16px;
+}
+
+.cancel-btn {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.save-btn {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.save-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+@media screen and (max-width: 768px) {
+    .trigger-dashboard { width: 95vw; max-height: 90vh; }
+    .form-row { flex-direction: column; gap: 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+    .trigger-dashboard { background: #2a2a2a; color: #eee; }
+    .trigger-dashboard-header { border-bottom-color: #444; }
+    .trigger-dashboard-header h3 { color: #eee; }
+    .trigger-dashboard-header .close-popover { color: #aaa; }
+    .trigger-dashboard-header .close-popover:hover { color: #fff; }
+    .trigger-tabs { border-bottom-color: #444; }
+    .trigger-tabs button { color: #aaa; }
+    .trigger-tabs button.active { color: #4da3ff; border-bottom-color: #4da3ff; }
+    .device-card { background: #333; border-color: #555; }
+    .device-card.discovered { background: #1a3355; border-color: #2a5588; }
+    .device-detail { color: #aaa; }
+    .register-btn, .test-btn.on { background: #1a7a32; border-color: #1a7a32; }
+    .test-btn.off { background: #a52020; border-color: #a52020; }
+    .delete-btn { color: #ff6b6b; border-color: #ff6b6b; }
+    .delete-btn:hover { background: #a52020; }
+    .trigger-card { border-color: #444; }
+    .trigger-card.disabled { border-left-color: #555; }
+    .trigger-header { background: #333; border-bottom-color: #444; }
+    .trigger-actions { border-top-color: #444; }
+    .form-section { border-color: #444; background: #333; }
+    .form-section h4 { color: #eee; }
+    .form-group label { color: #ccc; }
+    .form-group input, .form-group select, .form-group textarea {
+        background: #3a3a3a;
+        border-color: #555;
+        color: #eee;
+    }
+    .day-btn { background: #3a3a3a; border-color: #555; color: #ccc; }
+    .day-btn.selected { background: #0056b3; border-color: #0056b3; }
+    .condition-row select { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-value { background: #3a3a3a; border-color: #555; color: #eee; }
+    .trigger-message.success { color: #90EE90; }
+    .trigger-message.error { color: #FF7F7F; }
+}

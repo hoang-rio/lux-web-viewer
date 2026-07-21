@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect, forwardRef, lazy, Suspense } from 'react';
 import Loading from './Loading';
 import * as logUtil from '../utils/logUtil';
 import './SettingsPopover.css';
+
+const TriggerDashboard = lazy(() => import('./TriggerDashboard'));
 
 interface SettingsPopoverProps {
   onClose: () => void;
@@ -34,6 +36,7 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
   const [message, setMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   const [passwordConfirm, setPasswordConfirm] = useState<string>('');
   const [cidrError, setCidrError] = useState<string | null>(null);
+  const [showTriggerDashboard, setShowTriggerDashboard] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -199,6 +202,13 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
       <div className="notification-popover-content">
         <div className="notification-popover-header">
           <h3>{t("settings.title")}</h3>
+          <button
+            className="triggers-dashboard-btn"
+            onClick={() => setShowTriggerDashboard(true)}
+            title={t("triggers.title")}
+          >
+            ⚡
+          </button>
           {message && (
             <div className={`settings-message ${message.type}`}>
               {message.text}
@@ -434,6 +444,17 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
           </button>
         </div>
       </div>
+      {showTriggerDashboard && (
+        <Suspense fallback={
+          <div className="trigger-dashboard-overlay">
+            <div className="trigger-dashboard">
+              <Loading />
+            </div>
+          </div>
+        }>
+          <TriggerDashboard onClose={() => setShowTriggerDashboard(false)} />
+        </Suspense>
+      )}
     </div>
   );
 });

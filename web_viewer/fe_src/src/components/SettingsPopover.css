@@ -143,6 +143,22 @@
     right: 8px;
 }
 
+.triggers-dashboard-btn {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    margin-right: 24px;
+    color: #333;
+}
+
+.triggers-dashboard-btn:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
 .settings-popover .setting-descrtiption {
     font-size: 13px;
     color: #888;
@@ -182,5 +198,13 @@
     }
     .settings-popover .setting-descrtiption {
         color: #bbb;
+    }
+    .triggers-dashboard-btn {
+        color: #eee;
+        border-color: #666;
+    }
+    .triggers-dashboard-btn:hover {
+        background: #444;
+        border-color: #888;
     }
 }
