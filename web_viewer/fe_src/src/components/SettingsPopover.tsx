@@ -1,13 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, forwardRef, lazy, Suspense } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import Loading from './Loading';
 import * as logUtil from '../utils/logUtil';
 import './SettingsPopover.css';
 
-const TriggerDashboard = lazy(() => import('./TriggerDashboard'));
-
 interface SettingsPopoverProps {
   onClose: () => void;
+  onOpenTriggers: () => void;
 }
 
 interface Settings {
@@ -27,7 +26,7 @@ interface Settings {
   AUTH_BYPASS_CIDR: string;
 }
 
-const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose }, ref) => {
+const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers }, ref) => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [originalSettings, setOriginalSettings] = useState<Settings | null>(null);
@@ -36,7 +35,6 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
   const [message, setMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   const [passwordConfirm, setPasswordConfirm] = useState<string>('');
   const [cidrError, setCidrError] = useState<string | null>(null);
-  const [showTriggerDashboard, setShowTriggerDashboard] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -204,7 +202,7 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
           <h3>{t("settings.title")}</h3>
           <button
             className="triggers-dashboard-btn"
-            onClick={() => setShowTriggerDashboard(true)}
+            onClick={onOpenTriggers}
             title={t("triggers.title")}
           >
             ⚡
@@ -444,17 +442,6 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
           </button>
         </div>
       </div>
-      {showTriggerDashboard && (
-        <Suspense fallback={
-          <div className="trigger-dashboard-overlay">
-            <div className="trigger-dashboard">
-              <Loading />
-            </div>
-          </div>
-        }>
-          <TriggerDashboard onClose={() => setShowTriggerDashboard(false)} />
-        </Suspense>
-      )}
     </div>
   );
 });
