@@ -98,9 +98,24 @@ export interface ITuyaDevice {
 }
 
 export interface ITriggerCondition {
-  field: string;
+  condition_type?: 'inverter' | 'device';
+  field?: string;
+  device_id?: string;
+  dps_key?: string;
   op: string;
-  value: number;
+  value?: number;
+  compare_value?: string | number | boolean;
+}
+
+export interface ITriggerAction {
+  action_type: string;
+  device_id: string | null;
+  params?: {
+    dp?: number;
+    value?: boolean | number | string;
+    notification_title?: string;
+    notification_body?: string;
+  };
 }
 
 export interface ITriggerActionParams {
@@ -118,6 +133,7 @@ export interface ITrigger {
   when_end_time: string | null;
   when_days: string | null;
   conditions: ITriggerCondition[];
+  actions?: ITriggerAction[];
   action_type: string;
   action_device_id: string | null;
   action_params: ITriggerActionParams | null;

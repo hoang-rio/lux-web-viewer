@@ -342,7 +342,8 @@
     padding: 0 4px;
 }
 
-.add-condition-btn {
+.add-condition-btn,
+.add-action-btn {
     padding: 4px 10px;
     border: 1px dashed #007bff;
     border-radius: 4px;
@@ -351,6 +352,42 @@
     cursor: pointer;
     font-size: 12px;
     margin-top: 4px;
+}
+
+.condition-type-select {
+    min-width: 100px;
+}
+
+.condition-device-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.condition-dps-key {
+    width: 50px;
+    min-width: 50px;
+    flex-shrink: 0;
+}
+
+.action-row {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #fff;
+}
+
+.action-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.action-row-number {
+    font-weight: bold;
+    font-size: 12px;
+    color: #666;
 }
 
 .form-actions {
@@ -397,6 +434,8 @@
     .trigger-tabs { border-bottom-color: #444; }
     .trigger-tabs button { color: #aaa; }
     .trigger-tabs button.active { color: #4da3ff; border-bottom-color: #4da3ff; }
+    .no-records { color: #999; }
+
     .device-card { background: #333; border-color: #555; }
     .device-card.discovered { background: #1a3355; border-color: #2a5588; }
     .device-detail { color: #aaa; }
@@ -405,10 +444,24 @@
     .test-btn.off { background: #a52020; border-color: #a52020; }
     .delete-btn { color: #ff6b6b; border-color: #ff6b6b; }
     .delete-btn:hover { background: #a52020; }
-    .trigger-card { border-color: #444; }
+
+    .trigger-card { background: #2e2e2e; border-color: #444; }
+    .trigger-card.enabled { border-left-color: #28a745; }
     .trigger-card.disabled { border-left-color: #555; }
     .trigger-header { background: #333; border-bottom-color: #444; }
+    .trigger-name { color: #eee; }
+    .trigger-toggle-slider { background-color: #555; }
+    .trigger-toggle-slider::before { background-color: #999; }
+    .trigger-details { background: #2e2e2e; }
+    .trigger-detail { color: #ccc; }
+    .trigger-detail strong { color: #ddd; }
     .trigger-actions { border-top-color: #444; }
+    .edit-btn { background: #2a3a50; color: #4da3ff; border-color: #4da3ff; }
+    .trigger-actions .test-btn { background: #3a3a3a; color: #eee; border-color: #666; }
+
+    .add-trigger-btn { background: #1a5a9e; }
+    .add-trigger-btn:hover { background: #2070b8; }
+
     .form-section { border-color: #444; background: #333; }
     .form-section h4 { color: #eee; }
     .form-group label { color: #ccc; }
@@ -417,10 +470,28 @@
         border-color: #555;
         color: #eee;
     }
+    .form-group input::placeholder, .form-group textarea::placeholder {
+        color: #888;
+    }
+    .form-actions { border-top-color: #444; }
     .day-btn { background: #3a3a3a; border-color: #555; color: #ccc; }
     .day-btn.selected { background: #0056b3; border-color: #0056b3; }
     .condition-row select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-value { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-type-select { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-device-select { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-dps-key { background: #3a3a3a; border-color: #555; color: #eee; }
+    .add-condition-btn { border-color: #4da3ff; color: #4da3ff; }
+    .action-row { border-color: #555; background: #333; }
+    .action-row-number { color: #aaa; }
+    .add-action-btn { border-color: #4da3ff; color: #4da3ff; }
+
+    .cancel-btn { background: #3a3a3a; color: #ccc; border-color: #666; }
+    .cancel-btn:hover { background: #4a4a4a; color: #eee; }
+    .save-btn { background: #1a5a9e; }
+    .save-btn:hover { background: #2070b8; }
+    .save-btn:disabled { background: #444; color: #888; }
+
     .trigger-message.success { color: #90EE90; }
     .trigger-message.error { color: #FF7F7F; }
     .wizard-warning {

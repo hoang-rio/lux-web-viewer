@@ -22,20 +22,23 @@ def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
     try:
         triggers = get_all_triggers(db_conn)
         now = datetime.now()
+        device_status_cache: dict[str, dict] = {}
         for trigger in triggers:
             if not trigger["enabled"]:
                 continue
             if not _is_in_time_window(trigger, now):
                 continue
-            if not _check_conditions(trigger["conditions"], inverter_data):
+            if not _check_conditions(trigger["conditions"], inverter_data, db_conn, device_status_cache):
                 continue
             if not _check_cooldown(trigger, now):
                 continue
+            actions = _get_actions(trigger)
+            action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
             logger.info(
-                "Trigger '%s' (id=%s) conditions met, executing action: %s",
-                trigger["name"], trigger["id"], trigger["action_type"],
+                "Trigger '%s' (id=%s) conditions met, executing actions: %s",
+                trigger["name"], trigger["id"], action_desc,
             )
-            _execute_action_sync(trigger, db_conn)
+            _execute_actions(trigger, actions, db_conn)
             _update_last_triggered(trigger["id"], now, db_conn)
     except Exception as e:
         logger.error("Error evaluating triggers: %s", e)
@@ -70,22 +73,72 @@ def _is_in_time_window(trigger: dict, now: datetime) -> bool:
     return True
 
 
-def _check_conditions(conditions: list, inverter_data: dict) -> bool:
+def _check_conditions(conditions: list, inverter_data: dict, db_conn: sqlite3.Connection, device_status_cache: dict) -> bool:
     """All conditions must match (AND logic)."""
     if not conditions:
         return True
     for cond in conditions:
-        field = cond.get("field", "")
-        op = cond.get("op", "")
-        value = cond.get("value")
-        if field not in VALID_FIELDS or op not in VALID_OPERATORS or value is None:
-            continue
-        actual = inverter_data.get(field)
-        if actual is None:
-            return False
-        if not _compare(actual, op, value):
-            return False
+        cond_type = cond.get("condition_type", "inverter")
+        if cond_type == "device":
+            if not _check_device_condition(cond, db_conn, device_status_cache):
+                return False
+        else:
+            if not _check_inverter_condition(cond, inverter_data):
+                return False
     return True
+
+
+def _check_inverter_condition(cond: dict, inverter_data: dict) -> bool:
+    field = cond.get("field", "")
+    op = cond.get("op", "")
+    value = cond.get("value")
+    if field not in VALID_FIELDS or op not in VALID_OPERATORS or value is None:
+        return False
+    actual = inverter_data.get(field)
+    if actual is None:
+        return False
+    return _compare(actual, op, value)
+
+
+def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict) -> bool:
+    device_id = cond.get("device_id", "")
+    dps_key = cond.get("dps_key", "1")
+    op = cond.get("op", "==")
+    expected = cond.get("compare_value")
+    if not device_id or expected is None:
+        return False
+
+    if device_id not in cache:
+        try:
+            import tuya_manager as tm
+            row = db_conn.execute(
+                "SELECT id, ip, local_key, protocol_version FROM tuya_devices WHERE id = ?",
+                (device_id,),
+            ).fetchone()
+            if not row:
+                cache[device_id] = {"error": "not found"}
+            else:
+                loop = asyncio.new_event_loop()
+                try:
+                    cache[device_id] = loop.run_until_complete(
+                        tm.get_device_status(row[0], row[1], row[2], row[3])
+                    )
+                finally:
+                    loop.close()
+        except Exception as e:
+            logger.error("Failed to get device status for condition: %s", e)
+            cache[device_id] = {"error": str(e)}
+
+    status = cache.get(device_id, {})
+    if "error" in status:
+        return False
+
+    dps_data = status.get("dps", status)
+    actual = dps_data.get(str(dps_key))
+    if actual is None:
+        return False
+
+    return _compare(actual, op, expected)
 
 
 def _compare(actual, op: str, expected) -> bool:
@@ -124,21 +177,34 @@ def _check_cooldown(trigger: dict, now: datetime) -> bool:
         return True
 
 
-def _execute_action_sync(trigger: dict, db_conn: sqlite3.Connection):
-    """Execute the trigger's action. Runs tuya commands synchronously."""
-    action_type = trigger["action_type"]
-    device_id = trigger.get("action_device_id")
-    params = None
-    if trigger.get("action_params"):
-        try:
-            params = json.loads(trigger["action_params"])
-        except (json.JSONDecodeError, TypeError):
-            params = {}
+def _get_actions(trigger: dict) -> list[dict]:
+    """Extract actions list from trigger. Supports both legacy single-action and new multi-action."""
+    params = trigger.get("action_params") or {}
+    if isinstance(params, dict) and "actions" in params and isinstance(params["actions"], list):
+        return params["actions"]
+    return [{
+        "action_type": trigger.get("action_type", "notification"),
+        "device_id": trigger.get("action_device_id"),
+        "params": params,
+    }]
+
+
+def _execute_actions(trigger: dict, actions: list[dict], db_conn: sqlite3.Connection):
+    """Execute all actions for a trigger."""
+    for action in actions:
+        _execute_single_action(trigger, action, db_conn)
+
+
+def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connection):
+    """Execute a single action. Runs tuya commands synchronously."""
+    action_type = action.get("action_type", "")
+    device_id = action.get("device_id")
+    params = action.get("params") or {}
 
     try:
         if action_type in ("tuya_on", "tuya_off", "tuya_toggle", "tuya_set"):
             if not device_id:
-                logger.warning("Trigger '%s' has no device_id for Tuya action", trigger["name"])
+                logger.warning("Trigger '%s' action has no device_id for Tuya action", trigger["name"])
                 return
             action_map = {
                 "tuya_on": "turn_on",
@@ -249,7 +315,19 @@ def get_trigger(trigger_id: int, db_conn: sqlite3.Connection) -> Optional[dict]:
 def save_trigger(data: dict, db_conn: sqlite3.Connection) -> dict:
     trigger_id = data.get("id")
     conditions_json = json.dumps(data.get("conditions", []))
-    action_params_json = json.dumps(data.get("action_params")) if data.get("action_params") is not None else None
+
+    actions = data.get("actions")
+    if actions is not None:
+        action_params_payload = {"actions": actions}
+        first = actions[0] if actions else {}
+        action_type = first.get("action_type", "notification")
+        action_device_id = first.get("device_id")
+    else:
+        action_type = data.get("action_type", "notification")
+        action_device_id = data.get("action_device_id")
+        action_params_payload = data.get("action_params")
+
+    action_params_json = json.dumps(action_params_payload) if action_params_payload is not None else None
     enabled = 1 if data.get("enabled", True) else 0
 
     if trigger_id:
@@ -259,8 +337,8 @@ def save_trigger(data: dict, db_conn: sqlite3.Connection) -> dict:
             "cooldown_seconds=? WHERE id=?",
             (
                 data["name"], enabled, data.get("when_start_time"), data.get("when_end_time"),
-                data.get("when_days"), conditions_json, data["action_type"],
-                data.get("action_device_id"), action_params_json,
+                data.get("when_days"), conditions_json, action_type,
+                action_device_id, action_params_json,
                 data.get("cooldown_seconds", 300), trigger_id,
             ),
         )
@@ -272,8 +350,8 @@ def save_trigger(data: dict, db_conn: sqlite3.Connection) -> dict:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 data["name"], enabled, data.get("when_start_time"), data.get("when_end_time"),
-                data.get("when_days"), conditions_json, data["action_type"],
-                data.get("action_device_id"), action_params_json,
+                data.get("when_days"), conditions_json, action_type,
+                action_device_id, action_params_json,
                 data.get("cooldown_seconds", 300), datetime.now().isoformat(),
             ),
         )
