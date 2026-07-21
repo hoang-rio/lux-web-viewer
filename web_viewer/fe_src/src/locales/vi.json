@@ -206,6 +206,7 @@
     "unknownDevice": "Thiết bị không xác định",
     "enterDeviceName": "Nhập tên thiết bị:",
     "enterLocalKey": "Nhập local key (từ tinytuya wizard):",
-    "key": "Key"
+    "key": "Key",
+    "wizardWarning": "tinytuya wizard chưa được chạy. Tên thiết bị và local key sẽ không được tự động điền. Chạy 'python -m tinytuya wizard' trước."
   }
 }

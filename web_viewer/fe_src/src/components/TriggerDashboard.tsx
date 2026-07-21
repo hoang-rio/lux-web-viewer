@@ -44,6 +44,17 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const [editingTrigger, setEditingTrigger] = useState<ITrigger | null>(null);
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [wizardRun, setWizardRun] = useState<boolean>(true);
+
+  const fetchWizardStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/wizard-status`);
+      const data = await res.json();
+      setWizardRun(Boolean(data.wizard_run));
+    } catch (err) {
+      logUtil.error('Failed to fetch wizard status', err);
+    }
+  }, []);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -68,11 +79,11 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchDevices(), fetchTriggers()]);
+      await Promise.all([fetchDevices(), fetchTriggers(), fetchWizardStatus()]);
       setLoading(false);
     };
     load();
-  }, [fetchDevices, fetchTriggers]);
+  }, [fetchDevices, fetchTriggers, fetchWizardStatus]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -270,6 +281,7 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               devices={devices}
               scannedDevices={scannedDevices}
               scanning={scanning}
+              wizardRun={wizardRun}
               onScan={handleScan}
               onRegister={handleRegisterDevice}
               onDelete={handleDeleteDevice}
@@ -316,6 +328,7 @@ interface DevicesTabProps {
   devices: ITuyaDevice[];
   scannedDevices: IScannedDevice[];
   scanning: boolean;
+  wizardRun: boolean;
   onScan: () => void;
   onRegister: (d: IScannedDevice) => void;
   onDelete: (id: string) => void;
@@ -323,10 +336,15 @@ interface DevicesTabProps {
   onAddDevice: () => void;
 }
 
-function DevicesTab({ devices, scannedDevices, scanning, onScan, onRegister, onDelete, onTest }: DevicesTabProps) {
+function DevicesTab({ devices, scannedDevices, scanning, wizardRun, onScan, onRegister, onDelete, onTest }: DevicesTabProps) {
   const { t } = useTranslation();
   return (
     <div className="devices-tab">
+      {!wizardRun && (
+        <div className="wizard-warning">
+          {t('triggers.wizardWarning')}
+        </div>
+      )}
       <div className="devices-actions">
         <button onClick={onScan} disabled={scanning} className="scan-btn">
           {scanning ? t('triggers.scanning') : t('triggers.scanForDevices')}

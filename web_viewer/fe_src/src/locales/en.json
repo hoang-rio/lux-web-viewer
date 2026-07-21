@@ -208,6 +208,7 @@
     "unknownDevice": "Unknown device",
     "enterDeviceName": "Enter device name:",
     "enterLocalKey": "Enter local key (from tinytuya wizard):",
-    "key": "Key"
+    "key": "Key",
+    "wizardWarning": "tinytuya wizard has not been run yet. Device names and local keys will not be auto-filled. Run 'python -m tinytuya wizard' first."
   }
 }

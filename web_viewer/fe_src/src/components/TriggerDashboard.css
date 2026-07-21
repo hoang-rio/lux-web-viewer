@@ -96,6 +96,16 @@
 
 .devices-tab .devices-actions { margin-bottom: 12px; }
 
+.wizard-warning {
+    padding: 10px 12px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    color: #856404;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
 .scan-btn {
     padding: 8px 16px;
     background-color: #007bff;
@@ -413,4 +423,9 @@
     .condition-value { background: #3a3a3a; border-color: #555; color: #eee; }
     .trigger-message.success { color: #90EE90; }
     .trigger-message.error { color: #FF7F7F; }
+    .wizard-warning {
+        background: #3a2f00;
+        border-color: #665500;
+        color: #ffc107;
+    }
 }

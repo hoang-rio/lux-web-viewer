@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Optional
@@ -7,6 +8,13 @@ from typing import Optional
 import tinytuya
 
 logger = logging.getLogger(__name__)
+
+DEVICES_JSON_FILE = "devices.json"
+
+
+def is_wizard_run() -> bool:
+    """Check if tinytuya wizard has been run (devices.json exists)."""
+    return os.path.exists(DEVICES_JSON_FILE)
 
 
 async def scan_devices() -> list[dict]:

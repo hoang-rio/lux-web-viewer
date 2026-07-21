@@ -451,6 +451,10 @@ async def scan_tuya_devices(_: web.Request):
         return web.json_response({"devices": []})
 
 
+async def tuya_wizard_status(_: web.Request):
+    return web.json_response({"wizard_run": tuya_manager.is_wizard_run()})
+
+
 async def add_tuya_device(request: web.Request):
     try:
         data = await request.json()
@@ -675,6 +679,7 @@ def create_runner():
         web.post("/settings", update_settings),
         web.get("/tuya-devices", get_tuya_devices),
         web.post("/tuya-devices/scan", scan_tuya_devices),
+        web.get("/tuya-devices/wizard-status", tuya_wizard_status),
         web.post("/tuya-devices", add_tuya_device),
         web.delete("/tuya-devices/{id}", delete_tuya_device),
         web.post("/tuya-devices/{id}/status", get_device_status),
