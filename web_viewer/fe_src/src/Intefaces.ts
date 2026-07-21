@@ -132,4 +132,5 @@ export interface IScannedDevice {
   version: string;
   product_id: string;
   name: string;
+  local_key: string;
 }

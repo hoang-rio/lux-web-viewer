@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 async def scan_devices() -> list[dict]:
     """Scan the local network for Tuya devices.
 
-    Returns a list of dicts with keys: gwId, ip, version, product_id, name.
+    Returns a list of dicts with keys: gwId, ip, version, product_id, name, local_key.
+    If devices.json exists from tinytuya wizard, name and local_key are auto-filled.
     """
     loop = asyncio.get_event_loop()
     devices = await loop.run_in_executor(None, _sync_scan)
@@ -25,17 +26,18 @@ async def scan_devices() -> list[dict]:
             continue
         result.append({
             "ip": ip_addr,
-            "gwId": info.get("gwId", ""),
+            "gwId": info.get("gwId", info.get("id", "")),
             "version": info.get("version", "3.3"),
             "product_id": info.get("product_id", ""),
             "name": info.get("name", ""),
+            "local_key": info.get("key", info.get("local_key", "")),
         })
     return result
 
 
 def _sync_scan() -> dict:
     try:
-        result = tinytuya.deviceScan(verbose=False, maxretry=15, poll=False)
+        result = tinytuya.deviceScan(verbose=False, maxretry=15, poll=True)
         if not isinstance(result, dict):
             logger.warning("tinytuya.deviceScan returned %s instead of dict", type(result).__name__)
             return {}

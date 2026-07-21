@@ -95,8 +95,12 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const handleRegisterDevice = async (scanned: IScannedDevice) => {
     const name = prompt(t('triggers.enterDeviceName'), scanned.name || 'Tuya Device');
     if (!name) return;
-    const localKey = prompt(t('triggers.enterLocalKey'));
-    if (!localKey) return;
+    let localKey = scanned.local_key;
+    if (!localKey) {
+      const input = prompt(t('triggers.enterLocalKey'));
+      if (!input) return;
+      localKey = input;
+    }
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices`, {
         method: 'POST',
@@ -338,6 +342,11 @@ function DevicesTab({ devices, scannedDevices, scanning, onScan, onRegister, onD
                 <span className="device-detail">ID: {d.gwId}</span>
                 <span className="device-detail">IP: {d.ip}</span>
                 <span className="device-detail">v{d.version}</span>
+                {d.local_key && (
+                  <span className="device-detail device-key">
+                    {t('triggers.key')}: {d.local_key.slice(0, 4)}...{d.local_key.slice(-4)}
+                  </span>
+                )}
               </div>
               <button onClick={() => onRegister(d)} className="register-btn">
                 {t('triggers.register')}

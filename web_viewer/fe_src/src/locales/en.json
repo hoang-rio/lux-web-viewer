@@ -207,6 +207,7 @@
     "lastTriggered": "Last triggered",
     "unknownDevice": "Unknown device",
     "enterDeviceName": "Enter device name:",
-    "enterLocalKey": "Enter local key (from tinytuya wizard):"
+    "enterLocalKey": "Enter local key (from tinytuya wizard):",
+    "key": "Key"
   }
 }

@@ -205,6 +205,7 @@
     "lastTriggered": "Lần kích hoạt cuối",
     "unknownDevice": "Thiết bị không xác định",
     "enterDeviceName": "Nhập tên thiết bị:",
-    "enterLocalKey": "Nhập local key (từ tinytuya wizard):"
+    "enterLocalKey": "Nhập local key (từ tinytuya wizard):",
+    "key": "Key"
   }
 }

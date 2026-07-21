@@ -141,6 +141,11 @@
 .device-name { font-weight: bold; font-size: 14px; }
 .device-detail { font-size: 12px; color: #666; }
 
+.device-key {
+    font-family: monospace;
+    color: #28a745;
+}
+
 .device-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 .register-btn,
@@ -385,6 +390,7 @@
     .device-card { background: #333; border-color: #555; }
     .device-card.discovered { background: #1a3355; border-color: #2a5588; }
     .device-detail { color: #aaa; }
+    .device-key { color: #90EE90; }
     .register-btn, .test-btn.on { background: #1a7a32; border-color: #1a7a32; }
     .test-btn.off { background: #a52020; border-color: #a52020; }
     .delete-btn { color: #ff6b6b; border-color: #ff6b6b; }
