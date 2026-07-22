@@ -79,6 +79,7 @@
     cursor: pointer;
     font-size: 14px;
     color: #666;
+    transition: color 0.15s;
 }
 
 .trigger-tabs button.active {
@@ -113,8 +114,10 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    transition: opacity 0.15s;
 }
 
+.scan-btn:hover:not(:disabled) { opacity: 0.85; }
 .scan-btn:disabled { background-color: #ccc; }
 
 .devices-section { margin-bottom: 16px; }
@@ -168,14 +171,31 @@
     cursor: pointer;
     font-size: 12px;
     background: #fff;
+    transition: opacity 0.15s, background-color 0.15s, color 0.15s;
 }
 
 .register-btn { background: #28a745; color: white; border-color: #28a745; }
+.register-btn:hover { opacity: 0.85; }
 .test-btn.on { background: #28a745; color: white; border-color: #28a745; }
+.test-btn.on:hover { opacity: 0.85; }
 .test-btn.off { background: #dc3545; color: white; border-color: #dc3545; }
+.test-btn.off:hover { opacity: 0.85; }
 
-.delete-btn { color: #dc3545; border-color: #dc3545; }
+.delete-btn { color: #dc3545; border-color: #dc3545; background: transparent; }
 .delete-btn:hover { background: #dc3545; color: white; }
+
+.edit-btn { background: #fff; color: #007bff; border-color: #007bff; }
+.edit-btn:hover { background: #007bff; color: white; }
+
+.tuya-only-notice {
+    padding: 6px 10px;
+    background: #e8f4fd;
+    border: 1px solid #b3d4fc;
+    border-radius: 4px;
+    color: #0c5460;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
 
 .no-records {
     text-align: center;
@@ -193,7 +213,10 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    transition: opacity 0.15s;
 }
+
+.add-trigger-btn:hover { opacity: 0.85; }
 
 .trigger-card {
     border: 1px solid #ddd;
@@ -258,8 +281,6 @@
     border-top: 1px solid #eee;
 }
 
-.edit-btn { background: #fff; color: #007bff; border-color: #007bff; }
-
 .trigger-form { padding: 16px; overflow-y: auto; flex: 1; }
 
 .form-group { margin-bottom: 12px; }
@@ -307,15 +328,27 @@
     background: #fff;
     cursor: pointer;
     font-size: 12px;
+    transition: background-color 0.15s, color 0.15s;
 }
 
+.day-btn:hover { background: #e9ecef; }
 .day-btn.selected { background: #007bff; color: white; border-color: #007bff; }
+.day-btn.selected:hover { background: #0056b3; }
 
 .condition-row {
     display: flex;
     gap: 6px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #ddd;
+    flex-wrap: wrap;
+}
+
+.condition-row:last-of-type {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
 }
 
 .condition-row select {
@@ -323,6 +356,7 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 13px;
+    min-width: 0;
 }
 
 .condition-value {
@@ -342,6 +376,8 @@
     padding: 0 4px;
 }
 
+.remove-btn:hover { color: #a71d2a; }
+
 .add-condition-btn,
 .add-action-btn {
     padding: 4px 10px;
@@ -352,7 +388,11 @@
     cursor: pointer;
     font-size: 12px;
     margin-top: 4px;
+    transition: background-color 0.15s;
 }
+
+.add-condition-btn:hover,
+.add-action-btn:hover { background: rgba(0, 123, 255, 0.08); }
 
 .condition-type-select {
     min-width: 100px;
@@ -375,6 +415,12 @@
     padding: 10px;
     margin-bottom: 8px;
     background: #fff;
+    border-bottom: 2px dashed #ccc;
+}
+
+.action-row:last-of-type {
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 0;
 }
 
 .action-row-header {
@@ -406,7 +452,10 @@
     background: #fff;
     cursor: pointer;
     font-size: 14px;
+    transition: background-color 0.15s, color 0.15s;
 }
+
+.cancel-btn:hover { background: #e9ecef; }
 
 .save-btn {
     padding: 8px 16px;
@@ -416,13 +465,21 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
+    transition: opacity 0.15s;
 }
 
+.save-btn:hover:not(:disabled) { opacity: 0.85; }
 .save-btn:disabled { background-color: #ccc; cursor: not-allowed; }
 
 @media screen and (max-width: 768px) {
     .trigger-dashboard { width: 95vw; max-height: 90vh; }
     .form-row { flex-direction: column; gap: 0; }
+    .condition-row { flex-direction: column; align-items: stretch; }
+    .condition-row select,
+    .condition-row .condition-value { width: 100%; }
+    .condition-type-select { width: 100%; }
+    .condition-device-select { width: 100%; }
+    .condition-dps-select { width: 100%; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -434,16 +491,29 @@
     .trigger-tabs { border-bottom-color: #444; }
     .trigger-tabs button { color: #aaa; }
     .trigger-tabs button.active { color: #4da3ff; border-bottom-color: #4da3ff; }
+    .trigger-tabs button:hover { color: #6db8ff; }
     .no-records { color: #999; }
 
     .device-card { background: #333; border-color: #555; }
     .device-card.discovered { background: #1a3355; border-color: #2a5588; }
     .device-detail { color: #aaa; }
     .device-key { color: #90EE90; }
-    .register-btn, .test-btn.on { background: #1a7a32; border-color: #1a7a32; }
+    .register-btn { background: #1a7a32; border-color: #1a7a32; }
+    .register-btn:hover { opacity: 0.85; }
+    .test-btn.on { background: #1a7a32; border-color: #1a7a32; }
+    .test-btn.on:hover { opacity: 0.85; }
     .test-btn.off { background: #a52020; border-color: #a52020; }
-    .delete-btn { color: #ff6b6b; border-color: #ff6b6b; }
-    .delete-btn:hover { background: #a52020; }
+    .test-btn.off:hover { opacity: 0.85; }
+    .delete-btn { color: #ff6b6b; border-color: #ff6b6b; background: transparent; }
+    .delete-btn:hover { background: #a52020; color: #fff; }
+    .edit-btn { background: #2a3a50; color: #4da3ff; border-color: #4da3ff; }
+    .edit-btn:hover { background: #3a5070; }
+
+    .tuya-only-notice {
+        background: #1a3355;
+        border-color: #2a5588;
+        color: #8ec8f0;
+    }
 
     .trigger-card { background: #2e2e2e; border-color: #444; }
     .trigger-card.enabled { border-left-color: #28a745; }
@@ -451,13 +521,13 @@
     .trigger-header { background: #333; border-bottom-color: #444; }
     .trigger-name { color: #eee; }
     .trigger-toggle-slider { background-color: #555; }
-    .trigger-toggle-slider::before { background-color: #999; }
+    .trigger-toggle-slider::before { background-color: #fff; }
     .trigger-details { background: #2e2e2e; }
     .trigger-detail { color: #ccc; }
     .trigger-detail strong { color: #ddd; }
     .trigger-actions { border-top-color: #444; }
-    .edit-btn { background: #2a3a50; color: #4da3ff; border-color: #4da3ff; }
     .trigger-actions .test-btn { background: #3a3a3a; color: #eee; border-color: #666; }
+    .trigger-actions .test-btn:hover { background: #4a4a4a; }
 
     .add-trigger-btn { background: #1a5a9e; }
     .add-trigger-btn:hover { background: #2070b8; }
@@ -475,16 +545,22 @@
     }
     .form-actions { border-top-color: #444; }
     .day-btn { background: #3a3a3a; border-color: #555; color: #ccc; }
+    .day-btn:hover { background: #4a4a4a; }
     .day-btn.selected { background: #0056b3; border-color: #0056b3; }
+    .day-btn.selected:hover { background: #006ad3; }
     .condition-row select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-value { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-type-select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-device-select { background: #3a3a3a; border-color: #555; color: #eee; }
-    .condition-dps-key { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-dps-select { background: #3a3a3a; border-color: #555; color: #eee; }
+    .condition-row { border-bottom-color: #555; }
+    .remove-btn:hover { color: #ff4444; }
     .add-condition-btn { border-color: #4da3ff; color: #4da3ff; }
-    .action-row { border-color: #555; background: #333; }
+    .add-condition-btn:hover { background: rgba(77, 163, 255, 0.12); }
+    .action-row { border-color: #555; background: #333; border-bottom-color: #555; }
     .action-row-number { color: #aaa; }
     .add-action-btn { border-color: #4da3ff; color: #4da3ff; }
+    .add-action-btn:hover { background: rgba(77, 163, 255, 0.12); }
 
     .cancel-btn { background: #3a3a3a; color: #ccc; border-color: #666; }
     .cancel-btn:hover { background: #4a4a4a; color: #eee; }

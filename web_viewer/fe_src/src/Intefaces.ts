@@ -102,6 +102,7 @@ export interface ITriggerCondition {
   field?: string;
   device_id?: string;
   dps_key?: string;
+  dps_code?: string;
   op: string;
   value?: number;
   compare_value?: string | number | boolean;
@@ -110,6 +111,7 @@ export interface ITriggerCondition {
 export interface ITriggerAction {
   action_type: string;
   device_id: string | null;
+  dps_key?: string;
   params?: {
     dp?: number;
     value?: boolean | number | string;
@@ -149,4 +151,22 @@ export interface IScannedDevice {
   product_id: string;
   name: string;
   local_key: string;
+}
+
+export interface IDpsMapping {
+  code: string;
+  type: 'Boolean' | 'Integer' | 'Enum' | 'String' | 'Raw';
+  values: {
+    unit?: string;
+    min?: number;
+    max?: number;
+    scale?: number;
+    step?: number;
+    range?: string[];
+  };
+}
+
+export interface IDeviceMapping {
+  name: string;
+  mapping: Record<string, IDpsMapping>;
 }

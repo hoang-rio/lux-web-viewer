@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import sqlite3
@@ -110,7 +109,6 @@ def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict
 
     if device_id not in cache:
         try:
-            import tuya_manager as tm
             row = db_conn.execute(
                 "SELECT id, ip, local_key, protocol_version FROM tuya_devices WHERE id = ?",
                 (device_id,),
@@ -118,13 +116,7 @@ def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict
             if not row:
                 cache[device_id] = {"error": "not found"}
             else:
-                loop = asyncio.new_event_loop()
-                try:
-                    cache[device_id] = loop.run_until_complete(
-                        tm.get_device_status(row[0], row[1], row[2], row[3])
-                    )
-                finally:
-                    loop.close()
+                cache[device_id] = tuya_manager._sync_get_status(row[0], row[1], row[2], row[3])
         except Exception as e:
             logger.error("Failed to get device status for condition: %s", e)
             cache[device_id] = {"error": str(e)}
@@ -220,13 +212,7 @@ def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connect
                 logger.warning("Trigger '%s': device %s not found", trigger["name"], device_id)
                 return
             tuya_action = action_map[action_type]
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(
-                    tuya_manager.control_device(row[0], row[1], row[2], tuya_action, row[3], params)
-                )
-            finally:
-                loop.close()
+            tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params)
         elif action_type == "notification":
             _send_notification(trigger, params, db_conn)
         else:

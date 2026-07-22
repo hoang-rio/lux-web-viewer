@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ITuyaDevice, ITrigger, ITriggerCondition, ITriggerAction, IScannedDevice } from '../Intefaces';
+import { ITuyaDevice, ITrigger, ITriggerCondition, ITriggerAction, IScannedDevice, IDeviceMapping, IDpsMapping } from '../Intefaces';
 import Loading from './Loading';
 import * as logUtil from '../utils/logUtil';
 import './TriggerDashboard.css';
@@ -23,15 +23,53 @@ const INVERTER_FIELDS = [
 
 const CONDITION_OPS = ['>', '<', '>=', '<=', '==', '!='];
 
-const ACTION_TYPES = [
-  { value: 'tuya_on', label: 'triggers.actionTurnOn' },
-  { value: 'tuya_off', label: 'triggers.actionTurnOff' },
-  { value: 'tuya_toggle', label: 'triggers.actionToggle' },
-  { value: 'tuya_set', label: 'triggers.actionSetValue' },
-  { value: 'notification', label: 'triggers.actionNotification' },
-];
-
 const DAY_KEYS = ['triggers.dayMon', 'triggers.dayTue', 'triggers.dayWed', 'triggers.dayThu', 'triggers.dayFri', 'triggers.daySat', 'triggers.daySun'];
+
+function getDeviceDpsList(deviceId: string | null | undefined, mappings: Record<string, IDeviceMapping>): [string, IDpsMapping][] {
+  if (!deviceId || !mappings[deviceId]) return [];
+  return Object.entries(mappings[deviceId].mapping);
+}
+
+function getActionTypeOptions(dpsList: [string, IDpsMapping][]): { value: string; label: string }[] {
+  const options = [
+    { value: 'notification', label: 'triggers.actionNotification' },
+  ];
+  for (const [dpsKey, dps] of dpsList) {
+    const label = dps.code || dpsKey;
+    if (dps.type === 'Boolean') {
+      options.push({ value: `tuya_on:${dpsKey}`, label: `${label} → ${'ON'}` });
+      options.push({ value: `tuya_off:${dpsKey}`, label: `${label} → ${'OFF'}` });
+    } else if (dps.type === 'Integer') {
+      options.push({ value: `tuya_set:${dpsKey}`, label: `${label} → ${'SET'}` });
+    } else if (dps.type === 'Enum') {
+      options.push({ value: `tuya_set:${dpsKey}`, label: `${label} → ${'SET'}` });
+    }
+  }
+  if (options.length === 1) {
+    options.push({ value: 'tuya_on:1', label: 'triggers.actionTurnOn' });
+    options.push({ value: 'tuya_off:1', label: 'triggers.actionTurnOff' });
+  }
+  return options;
+}
+
+function parseActionValue(actionValue: string): { action_type: string; dps_key: string } {
+  const parts = actionValue.split(':');
+  if (parts.length === 2) return { action_type: parts[0], dps_key: parts[1] };
+  return { action_type: actionValue, dps_key: '1' };
+}
+
+function buildActionValue(actionType: string, dpsKey: string | undefined): string {
+  if (actionType === 'notification') return 'notification';
+  return `${actionType}:${dpsKey || '1'}`;
+}
+
+function formatDays(daysStr: string | null, t: (key: string) => string): string {
+  if (!daysStr) return '';
+  return daysStr.split(',').map((d) => {
+    const num = parseInt(d.trim());
+    return t(DAY_KEYS[num - 1] || '');
+  }).join(', ');
+}
 
 function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const { t } = useTranslation();
@@ -46,6 +84,7 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [wizardRun, setWizardRun] = useState<boolean>(true);
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, boolean>>({});
+  const [deviceMappings, setDeviceMappings] = useState<Record<string, IDeviceMapping>>({});
 
   const fetchWizardStatus = useCallback(async () => {
     try {
@@ -77,6 +116,16 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
     }
   }, []);
 
+  const fetchDeviceMappings = useCallback(async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/mappings`);
+      const data = await res.json();
+      setDeviceMappings(data.mappings || {});
+    } catch (err) {
+      logUtil.error('Failed to fetch device mappings', err);
+    }
+  }, []);
+
   const fetchDeviceStatuses = useCallback(async (devs: ITuyaDevice[]) => {
     const statuses: Record<string, boolean> = {};
     await Promise.all(
@@ -100,11 +149,11 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchDevices(), fetchTriggers(), fetchWizardStatus()]);
+      await Promise.all([fetchDevices(), fetchTriggers(), fetchWizardStatus(), fetchDeviceMappings()]);
       setLoading(false);
     };
     load();
-  }, [fetchDevices, fetchTriggers, fetchWizardStatus]);
+  }, [fetchDevices, fetchTriggers, fetchWizardStatus, fetchDeviceMappings]);
 
   useEffect(() => {
     if (devices.length > 0) {
@@ -156,6 +205,7 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
       if (data.success) {
         setMessage({ text: t('triggers.deviceRegistered'), type: 'success' });
         await fetchDevices();
+        await fetchDeviceMappings();
       } else {
         setMessage({ text: data.message || t('triggers.registerFailed'), type: 'error' });
       }
@@ -254,6 +304,7 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
       <TriggerForm
         trigger={editingTrigger}
         devices={devices}
+        deviceMappings={deviceMappings}
         onSave={async (data) => {
           try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers`, {
@@ -322,6 +373,7 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
             <TriggersTab
               triggers={triggers}
               devices={devices}
+              deviceMappings={deviceMappings}
               onAdd={() => setEditingTrigger(createEmptyTrigger())}
               onEdit={(t) => setEditingTrigger(t)}
               onDelete={handleDeleteTrigger}
@@ -344,7 +396,7 @@ function createEmptyTrigger(): ITrigger {
     when_end_time: null,
     when_days: null,
     conditions: [{ condition_type: 'inverter', field: 'soc', op: '>=', value: 100 }],
-    actions: [{ action_type: 'tuya_on', device_id: null, params: {} }],
+    actions: [{ action_type: 'tuya_on', device_id: null, dps_key: '1', params: {} }],
     action_type: 'tuya_on',
     action_device_id: null,
     action_params: null,
@@ -412,7 +464,9 @@ function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatus
         {devices.length === 0 ? (
           <div className="no-records">{t('triggers.noDevices')}</div>
         ) : (
-          devices.map((d) => {
+          <>
+            <div className="tuya-only-notice">{t('triggers.tuyaOnlyNotice')}</div>
+            {devices.map((d) => {
             const isOn = deviceStatuses[d.id] || false;
             return (
               <div key={d.id} className="device-card registered">
@@ -434,7 +488,8 @@ function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatus
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
     </div>
@@ -444,6 +499,7 @@ function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatus
 interface TriggersTabProps {
   triggers: ITrigger[];
   devices: ITuyaDevice[];
+  deviceMappings: Record<string, IDeviceMapping>;
   onAdd: () => void;
   onEdit: (t: ITrigger) => void;
   onDelete: (id: number) => void;
@@ -451,23 +507,53 @@ interface TriggersTabProps {
   onToggle: (t: ITrigger) => void;
 }
 
-function TriggersTab({ triggers, devices, onAdd, onEdit, onDelete, onTest, onToggle }: TriggersTabProps) {
+function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelete, onTest, onToggle }: TriggersTabProps) {
   const { t } = useTranslation();
 
   const resolveActions = (tr: ITrigger): ITriggerAction[] => {
     if (tr.actions && tr.actions.length > 0) return tr.actions;
-    return [{ action_type: tr.action_type, device_id: tr.action_device_id, params: tr.action_params || {} }];
+    return [{ action_type: tr.action_type, device_id: tr.action_device_id, dps_key: tr.action_params?.dp ? String(tr.action_params.dp) : '1', params: tr.action_params || {} }];
   };
 
   const resolveConditionLabel = (c: ITriggerCondition): string => {
     if (c.condition_type === 'device') {
       const dev = devices.find((d) => d.id === c.device_id);
       const devName = dev?.name || c.device_id;
-      return `${devName} [${c.dps_key || '1'}] ${c.op} ${c.compare_value}`;
+      const mapping = deviceMappings[c.device_id || ''];
+      let dpsLabel = c.dps_key || '1';
+      if (mapping?.mapping?.[c.dps_key || '']) {
+        dpsLabel = mapping.mapping[c.dps_key || ''].code || c.dps_key || '1';
+      }
+      return `${devName} [${dpsLabel}] ${c.op} ${c.compare_value}`;
     }
     const found = INVERTER_FIELDS.find((f) => f.value === c.field);
     const fieldLabel = found ? t(found.label) : (c.field || '');
     return `${fieldLabel} ${c.op} ${c.value}`;
+  };
+
+  const resolveActionLabel = (a: ITriggerAction): { typeLabel: string; targetLabel: string } => {
+    if (a.action_type === 'notification') {
+      return { typeLabel: t('triggers.actionNotification'), targetLabel: a.params?.notification_title || '' };
+    }
+    const actionMap: Record<string, string> = {
+      tuya_on: t('triggers.actionTurnOn'),
+      tuya_off: t('triggers.actionTurnOff'),
+      tuya_toggle: t('triggers.actionToggle'),
+      tuya_set: t('triggers.actionSetValue'),
+    };
+    const typeLabel = actionMap[a.action_type] || a.action_type;
+    const dev = devices.find((d) => d.id === a.device_id);
+    const devName = dev?.name || a.device_id || '';
+    let dpsLabel = '';
+    if (a.dps_key && a.device_id) {
+      const mapping = deviceMappings[a.device_id];
+      if (mapping?.mapping?.[a.dps_key]) {
+        dpsLabel = ` [${mapping.mapping[a.dps_key].code}]`;
+      } else {
+        dpsLabel = ` [${a.dps_key}]`;
+      }
+    }
+    return { typeLabel, targetLabel: `${devName}${dpsLabel}` };
   };
 
   return (
@@ -498,8 +584,8 @@ function TriggersTab({ triggers, devices, onAdd, onEdit, onDelete, onTest, onTog
               <div className="trigger-details">
                 {tr.when_start_time && tr.when_end_time && (
                   <div className="trigger-detail">
-                    <strong>{t('triggers.when')}:</strong> {tr.when_start_time} - {tr.when_end_time}
-                    {tr.when_days && ` (${tr.when_days})`}
+                    <strong>{t('triggers.when')}:</strong>                     {tr.when_start_time} - {tr.when_end_time}
+                    {tr.when_days && ` (${formatDays(tr.when_days, t)})`}
                   </div>
                 )}
                 <div className="trigger-detail">
@@ -514,16 +600,12 @@ function TriggersTab({ triggers, devices, onAdd, onEdit, onDelete, onTest, onTog
                 <div className="trigger-detail">
                   <strong>{t('triggers.then')}:</strong>{' '}
                   {actions.map((a, i) => {
-                    const actionLabel = t(ACTION_TYPES.find((at) => at.value === a.action_type)?.label || a.action_type);
-                    const dev = devices.find((d) => d.id === a.device_id);
+                    const { typeLabel, targetLabel } = resolveActionLabel(a);
                     return (
                       <span key={i}>
                         {i > 0 && ' + '}
-                        {actionLabel}
-                        {a.device_id && <> → {dev?.name || a.device_id}</>}
-                        {a.action_type === 'notification' && a.params?.notification_title && (
-                          <> - {a.params.notification_title}</>
-                        )}
+                        {typeLabel}
+                        {targetLabel && <> → {targetLabel}</>}
                       </span>
                     );
                   })}
@@ -553,11 +635,12 @@ function TriggersTab({ triggers, devices, onAdd, onEdit, onDelete, onTest, onTog
 interface TriggerFormProps {
   trigger: ITrigger;
   devices: ITuyaDevice[];
+  deviceMappings: Record<string, IDeviceMapping>;
   onSave: (data: ITrigger) => void;
   onCancel: () => void;
 }
 
-function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
+function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: TriggerFormProps) {
   const { t } = useTranslation();
   const [data, setData] = useState<ITrigger>({ ...trigger });
   const [conditions, setConditions] = useState<ITriggerCondition[]>(
@@ -567,7 +650,7 @@ function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
   );
   const [actions, setActions] = useState<ITriggerAction[]>(() => {
     if (trigger.actions && trigger.actions.length > 0) return [...trigger.actions];
-    return [{ action_type: trigger.action_type || 'tuya_on', device_id: trigger.action_device_id, params: trigger.action_params || {} }];
+    return [{ action_type: trigger.action_type || 'tuya_on', device_id: trigger.action_device_id, dps_key: trigger.action_params?.dp ? String(trigger.action_params.dp) : '1', params: trigger.action_params || {} }];
   });
   const [selectedDays, setSelectedDays] = useState<number[]>(() => {
     if (!trigger.when_days) return [];
@@ -672,6 +755,7 @@ function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
                       field: ct === 'inverter' ? (cond.field || 'soc') : undefined,
                       device_id: ct === 'device' ? (cond.device_id || '') : undefined,
                       dps_key: ct === 'device' ? (cond.dps_key || '1') : undefined,
+                      dps_code: ct === 'device' ? (cond.dps_code || '') : undefined,
                       compare_value: ct === 'device' ? (cond.compare_value ?? '') : undefined,
                       value: ct === 'inverter' ? (cond.value ?? 0) : undefined,
                     });
@@ -686,7 +770,16 @@ function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
                   <>
                     <select
                       value={cond.device_id || ''}
-                      onChange={(e) => updateCondition(i, { device_id: e.target.value })}
+                      onChange={(e) => {
+                        const newDeviceId = e.target.value;
+                        const dpsList = getDeviceDpsList(newDeviceId, deviceMappings);
+                        updateCondition(i, {
+                          device_id: newDeviceId,
+                          dps_key: dpsList.length > 0 ? dpsList[0][0] : '1',
+                          dps_code: dpsList.length > 0 ? dpsList[0][1].code : '',
+                          compare_value: '',
+                        });
+                      }}
                       className="condition-device-select"
                     >
                       <option value="">{t('triggers.selectDevice')}</option>
@@ -694,28 +787,78 @@ function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
-                    <input
-                      type="text"
-                      value={cond.dps_key || '1'}
-                      onChange={(e) => updateCondition(i, { dps_key: e.target.value })}
-                      className="condition-dps-key"
-                      placeholder="DPS"
-                    />
                     <select
-                      value={cond.op}
-                      onChange={(e) => updateCondition(i, { op: e.target.value })}
+                      value={cond.dps_key || '1'}
+                      onChange={(e) => {
+                        const dpsKey = e.target.value;
+                        const mapping = deviceMappings[cond.device_id || '']?.mapping?.[dpsKey];
+                        updateCondition(i, {
+                          dps_key: dpsKey,
+                          dps_code: mapping?.code || '',
+                          compare_value: '',
+                        });
+                      }}
+                      className="condition-dps-select"
                     >
-                      {CONDITION_OPS.map((op) => (
-                        <option key={op} value={op}>{op}</option>
+                      {getDeviceDpsList(cond.device_id, deviceMappings).map(([key, dps]) => (
+                        <option key={key} value={key}>
+                          {dps.code || key} ({dps.type})
+                        </option>
                       ))}
+                      {getDeviceDpsList(cond.device_id, deviceMappings).length === 0 && (
+                        <option value="1">switch_1</option>
+                      )}
                     </select>
-                    <input
-                      type="text"
-                      value={String(cond.compare_value ?? '')}
-                      onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
-                      className="condition-value"
-                      placeholder={t('triggers.condValue')}
-                    />
+                    {(() => {
+                      const dps = deviceMappings[cond.device_id || '']?.mapping?.[cond.dps_key || '1'];
+                      if (!dps) return null;
+                      if (dps.type === 'Boolean') {
+                        return (
+                          <select
+                            value={String(cond.compare_value ?? '')}
+                            onChange={(e) => updateCondition(i, { compare_value: e.target.value === 'true' })}
+                            className="condition-value"
+                          >
+                            <option value="">--</option>
+                            <option value="true">{t('triggers.testOn')}</option>
+                            <option value="false">{t('triggers.testOff')}</option>
+                          </select>
+                        );
+                      }
+                      if (dps.type === 'Enum' && dps.values.range) {
+                        return (
+                          <select
+                            value={String(cond.compare_value ?? '')}
+                            onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
+                            className="condition-value"
+                          >
+                            <option value="">--</option>
+                            {dps.values.range.map((v) => (
+                              <option key={v} value={v}>{v}</option>
+                            ))}
+                          </select>
+                        );
+                      }
+                      if (dps.type === 'Integer') {
+                        return (
+                          <input
+                            type="number"
+                            value={String(cond.compare_value ?? '')}
+                            onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
+                            className="condition-value"
+                            placeholder={`${dps.values.min ?? ''}~${dps.values.max ?? ''}`}
+                          />
+                        );
+                      }
+                      return (
+                        <input
+                          type="text"
+                          value={String(cond.compare_value ?? '')}
+                          onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
+                          className="condition-value"
+                        />
+                      );
+                    })()}
                   </>
                 ) : (
                   <>
@@ -765,73 +908,155 @@ function TriggerForm({ trigger, devices, onSave, onCancel }: TriggerFormProps) {
 
           <div className="form-section">
             <h4>{t('triggers.actionSection')}</h4>
-            {actions.map((action, i) => (
-              <div key={i} className="action-row">
-                <div className="action-row-header">
-                  <span className="action-row-number">#{i + 1}</span>
-                  {actions.length > 1 && (
-                    <button
-                      type="button"
-                      className="remove-btn"
-                      onClick={() => setActions(actions.filter((_, j) => j !== i))}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label>{t('triggers.actionType')}</label>
-                  <select
-                    value={action.action_type}
-                    onChange={(e) => updateAction(i, { action_type: e.target.value })}
-                  >
-                    {ACTION_TYPES.map((a) => (
-                      <option key={a.value} value={a.value}>{t(a.label)}</option>
-                    ))}
-                  </select>
-                </div>
-                {action.action_type !== 'notification' && (
+            {actions.map((action, i) => {
+              const dpsList = getDeviceDpsList(action.device_id, deviceMappings);
+              let actionOptions: { value: string; label: string }[];
+              if (dpsList.length === 0) {
+                actionOptions = [
+                  { value: 'tuya_on:1', label: t('triggers.actionTurnOn') },
+                  { value: 'tuya_off:1', label: t('triggers.actionTurnOff') },
+                  { value: 'notification', label: t('triggers.actionNotification') },
+                ];
+              } else {
+                actionOptions = getActionTypeOptions(dpsList);
+              }
+
+              const currentActionValue = action.action_type === 'notification'
+                ? 'notification'
+                : buildActionValue(action.action_type, action.dps_key);
+
+              return (
+                <div key={i} className="action-row">
+                  <div className="action-row-header">
+                    <span className="action-row-number">#{i + 1}</span>
+                    {actions.length > 1 && (
+                      <button
+                        type="button"
+                        className="remove-btn"
+                        onClick={() => setActions(actions.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <div className="form-group">
-                    <label>{t('triggers.device')}</label>
+                    <label>{t('triggers.actionType')}</label>
                     <select
-                      value={action.device_id || ''}
-                      onChange={(e) => updateAction(i, { device_id: e.target.value || null })}
+                      value={currentActionValue}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'notification') {
+                          updateAction(i, { action_type: 'notification', device_id: null, dps_key: undefined });
+                        } else {
+                          const parsed = parseActionValue(val);
+                          updateAction(i, { action_type: parsed.action_type, device_id: action.device_id, dps_key: parsed.dps_key });
+                        }
+                      }}
                     >
-                      <option value="">{t('triggers.selectDevice')}</option>
-                      {devices.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
+                      {action.action_type === 'notification' && !actionOptions.find(o => o.value === 'notification') && (
+                        <option value="notification">{t('triggers.actionNotification')}</option>
+                      )}
+                      {actionOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
                   </div>
-                )}
-                {action.action_type === 'notification' && (
-                  <>
-                    <div className="form-group">
-                      <label>{t('triggers.notifTitle')}</label>
-                      <input
-                        type="text"
-                        value={action.params?.notification_title || ''}
-                        onChange={(e) => updateActionParams(i, { notification_title: e.target.value })}
-                        placeholder={t('triggers.notifTitlePlaceholder')}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>{t('triggers.notifBody')}</label>
-                      <textarea
-                        value={action.params?.notification_body || ''}
-                        onChange={(e) => updateActionParams(i, { notification_body: e.target.value })}
-                        placeholder={t('triggers.notifBodyPlaceholder')}
-                        rows={2}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+                  {action.action_type === 'notification' ? (
+                    <>
+                      <div className="form-group">
+                        <label>{t('triggers.notifTitle')}</label>
+                        <input
+                          type="text"
+                          value={action.params?.notification_title || ''}
+                          onChange={(e) => updateActionParams(i, { notification_title: e.target.value })}
+                          placeholder={t('triggers.notifTitlePlaceholder')}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('triggers.notifBody')}</label>
+                        <textarea
+                          value={action.params?.notification_body || ''}
+                          onChange={(e) => updateActionParams(i, { notification_body: e.target.value })}
+                          placeholder={t('triggers.notifBodyPlaceholder')}
+                          rows={2}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="form-group">
+                        <label>{t('triggers.device')}</label>
+                        <select
+                          value={action.device_id || ''}
+                          onChange={(e) => {
+                            const newDeviceId = e.target.value || null;
+                            const newDpsList = getDeviceDpsList(newDeviceId, deviceMappings);
+                            const firstDps = newDpsList.length > 0 ? newDpsList[0] : null;
+                            updateAction(i, {
+                              device_id: newDeviceId,
+                              dps_key: firstDps ? firstDps[0] : '1',
+                              action_type: firstDps && firstDps[1].type === 'Boolean' ? 'tuya_on' : 'tuya_set',
+                            });
+                          }}
+                        >
+                          <option value="">{t('triggers.selectDevice')}</option>
+                          {devices.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {action.action_type === 'tuya_set' && (() => {
+                        const dps = deviceMappings[action.device_id || '']?.mapping?.[action.dps_key || '1'];
+                        if (!dps) return null;
+                        if (dps.type === 'Integer') {
+                          return (
+                            <div className="form-group">
+                              <label>{t('triggers.setValue')} ({dps.code} [{dps.values.min ?? 0}~{dps.values.max ?? ''}])</label>
+                              <input
+                                type="number"
+                                value={String(action.params?.value ?? '')}
+                                onChange={(e) => updateActionParams(i, { value: parseFloat(e.target.value) || 0 })}
+                                placeholder={`${dps.values.min ?? 0}~${dps.values.max ?? ''}`}
+                              />
+                            </div>
+                          );
+                        }
+                        if (dps.type === 'Enum' && dps.values.range) {
+                          return (
+                            <div className="form-group">
+                              <label>{t('triggers.setValue')} ({dps.code})</label>
+                              <select
+                                value={String(action.params?.value ?? '')}
+                                onChange={(e) => updateActionParams(i, { value: e.target.value })}
+                              >
+                                <option value="">{t('triggers.selectValue')}</option>
+                                {dps.values.range.map((v) => (
+                                  <option key={v} value={v}>{v}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="form-group">
+                            <label>{t('triggers.setValue')} ({dps.code})</label>
+                            <input
+                              type="text"
+                              value={String(action.params?.value ?? '')}
+                              onChange={(e) => updateActionParams(i, { value: e.target.value })}
+                            />
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              );
+            })}
             <button
               type="button"
               className="add-action-btn"
-              onClick={() => setActions([...actions, { action_type: 'tuya_on', device_id: null, params: {} }])}
+              onClick={() => setActions([...actions, { action_type: 'tuya_on', device_id: null, dps_key: '1', params: {} }])}
             >
               {t('triggers.addAction')}
             </button>

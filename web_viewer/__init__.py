@@ -470,6 +470,15 @@ async def add_tuya_device(request: web.Request):
         return web.json_response({"success": False}, status=500)
 
 
+async def get_device_mappings(_: web.Request):
+    try:
+        mappings = tuya_manager.get_device_mappings()
+        return web.json_response({"mappings": mappings})
+    except Exception as e:
+        logger.error("Error in get_device_mappings: %s", e)
+        return web.json_response({"mappings": {}})
+
+
 async def delete_tuya_device(request: web.Request):
     try:
         device_id = request.match_info.get("id")
@@ -555,7 +564,8 @@ async def test_trigger_route(request: web.Request):
             return web.json_response({"success": False, "message": "Trigger not found"}, status=404)
         from datetime import datetime
         now = datetime.now()
-        trigger_engine._execute_action_sync(tr, conn)
+        actions = trigger_engine._get_actions(tr)
+        trigger_engine._execute_actions(tr, actions, conn)
         trigger_engine._update_last_triggered(trigger_id, now, conn)
         return web.json_response({"success": True})
     except Exception as e:
@@ -678,6 +688,7 @@ def create_runner():
         web.get("/has-admin-access", has_admin_access),
         web.post("/settings", update_settings),
         web.get("/tuya-devices", get_tuya_devices),
+        web.get("/tuya-devices/mappings", get_device_mappings),
         web.post("/tuya-devices/scan", scan_tuya_devices),
         web.get("/tuya-devices/wizard-status", tuya_wizard_status),
         web.post("/tuya-devices", add_tuya_device),
