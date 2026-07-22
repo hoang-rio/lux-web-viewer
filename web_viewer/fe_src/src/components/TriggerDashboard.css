@@ -357,10 +357,13 @@
     border-radius: 4px;
     font-size: 13px;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .condition-value {
-    width: 80px;
+    min-width: 0;
+    flex: 1;
+    max-width: 120px;
     padding: 5px 6px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -477,7 +480,7 @@
     .form-row { flex-direction: column; gap: 0; }
     .condition-row { flex-direction: column; align-items: stretch; }
     .condition-row select,
-    .condition-row .condition-value { width: 100%; }
+    .condition-row .condition-value { width: 100%; max-width: none; }
     .condition-type-select { width: 100%; }
     .condition-device-select { width: 100%; }
     .condition-dps-select { width: 100%; }

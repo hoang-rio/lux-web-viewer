@@ -231,23 +231,38 @@ def get_device_mappings() -> dict:
 
     Returns dict keyed by device ID, each value has 'name' and 'mapping'.
     Mapping keys are DPS IDs (strings), values have 'code', 'type', 'values'.
+    Supports both dict-keyed and array formats of devices.json.
     """
     if not os.path.exists(DEVICES_JSON_FILE):
         return {}
     try:
         with open(DEVICES_JSON_FILE, "r") as f:
             data = json.load(f)
-        devices = data.get("devices", data) if isinstance(data, dict) else {}
+        raw_devices = data.get("devices", data) if isinstance(data, dict) else data
         result = {}
-        for dev_id, dev_info in devices.items():
-            if not isinstance(dev_info, dict):
-                continue
-            mapping = dev_info.get("mapping", {})
-            if mapping:
-                result[dev_id] = {
-                    "name": dev_info.get("name", ""),
-                    "mapping": mapping,
-                }
+        if isinstance(raw_devices, dict):
+            for dev_id, dev_info in raw_devices.items():
+                if not isinstance(dev_info, dict):
+                    continue
+                mapping = dev_info.get("mapping", {})
+                if mapping:
+                    result[dev_id] = {
+                        "name": dev_info.get("name", ""),
+                        "mapping": mapping,
+                    }
+        elif isinstance(raw_devices, list):
+            for dev_info in raw_devices:
+                if not isinstance(dev_info, dict):
+                    continue
+                dev_id = dev_info.get("id", "")
+                if not dev_id:
+                    continue
+                mapping = dev_info.get("mapping", {})
+                if mapping:
+                    result[dev_id] = {
+                        "name": dev_info.get("name", ""),
+                        "mapping": mapping,
+                    }
         return result
     except Exception as e:
         logger.error("Failed to read devices.json mappings: %s", e)

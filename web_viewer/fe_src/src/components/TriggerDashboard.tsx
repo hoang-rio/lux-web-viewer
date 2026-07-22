@@ -775,32 +775,59 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
+                    {cond.device_id && (() => {
+                      const dpsList = getDeviceDpsList(cond.device_id, deviceMappings);
+                      if (dpsList.length > 0) {
+                        return (
+                          <select
+                            value={cond.dps_key || dpsList[0][0]}
+                            onChange={(e) => {
+                              const dpsKey = e.target.value;
+                              const mapping = deviceMappings[cond.device_id || '']?.mapping?.[dpsKey];
+                              updateCondition(i, {
+                                dps_key: dpsKey,
+                                dps_code: mapping?.code || '',
+                                compare_value: '',
+                              });
+                            }}
+                            className="condition-dps-select"
+                          >
+                            {dpsList.map(([key, dps]) => (
+                              <option key={key} value={key}>
+                                {dps.code || key} ({dps.type})
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      }
+                      return (
+                        <select
+                          value={cond.dps_key || '1'}
+                          onChange={(e) => updateCondition(i, { dps_key: e.target.value, compare_value: '' })}
+                          className="condition-dps-select"
+                        >
+                          <option value="1">switch_1</option>
+                          <option value="2">switch_2</option>
+                          <option value="3">switch_3</option>
+                        </select>
+                      );
+                    })()}
                     <select
-                      value={cond.dps_key || '1'}
-                      onChange={(e) => {
-                        const dpsKey = e.target.value;
-                        const mapping = deviceMappings[cond.device_id || '']?.mapping?.[dpsKey];
-                        updateCondition(i, {
-                          dps_key: dpsKey,
-                          dps_code: mapping?.code || '',
-                          compare_value: '',
-                        });
-                      }}
-                      className="condition-dps-select"
+                      value={cond.op || '=='}
+                      onChange={(e) => updateCondition(i, { op: e.target.value })}
                     >
-                      {getDeviceDpsList(cond.device_id, deviceMappings).map(([key, dps]) => (
-                        <option key={key} value={key}>
-                          {dps.code || key} ({dps.type})
-                        </option>
+                      {CONDITION_OPS.map((op) => (
+                        <option key={op} value={op}>{op}</option>
                       ))}
-                      {getDeviceDpsList(cond.device_id, deviceMappings).length === 0 && (
-                        <option value="1">switch_1</option>
-                      )}
                     </select>
                     {(() => {
-                      const dps = deviceMappings[cond.device_id || '']?.mapping?.[cond.dps_key || '1'];
-                      if (!dps) return null;
-                      if (dps.type === 'Boolean') {
+                      const dps = cond.device_id
+                        ? deviceMappings[cond.device_id]?.mapping?.[cond.dps_key || '1']
+                        : undefined;
+                      const dpsType = dps?.type;
+                      const dpsValues = dps?.values;
+
+                      if (dpsType === 'Boolean') {
                         return (
                           <select
                             value={String(cond.compare_value ?? '')}
@@ -813,7 +840,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           </select>
                         );
                       }
-                      if (dps.type === 'Enum' && dps.values.range) {
+                      if (dpsType === 'Enum' && dpsValues?.range) {
                         return (
                           <select
                             value={String(cond.compare_value ?? '')}
@@ -821,20 +848,20 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                             className="condition-value"
                           >
                             <option value="">--</option>
-                            {dps.values.range.map((v) => (
+                            {dpsValues.range.map((v) => (
                               <option key={v} value={v}>{v}</option>
                             ))}
                           </select>
                         );
                       }
-                      if (dps.type === 'Integer') {
+                      if (dpsType === 'Integer') {
                         return (
                           <input
                             type="number"
                             value={String(cond.compare_value ?? '')}
                             onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
                             className="condition-value"
-                            placeholder={`${dps.values.min ?? ''}~${dps.values.max ?? ''}`}
+                            placeholder={dpsValues ? `${dpsValues.min ?? ''}~${dpsValues.max ?? ''}` : ''}
                           />
                         );
                       }
@@ -844,6 +871,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           value={String(cond.compare_value ?? '')}
                           onChange={(e) => updateCondition(i, { compare_value: e.target.value })}
                           className="condition-value"
+                          placeholder={t('triggers.condValue')}
                         />
                       );
                     })()}
@@ -989,42 +1017,59 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           </select>
                         </div>
                       )}
+                      {action.device_id && dpsList.length === 0 && (
+                        <div className="form-group">
+                          <label>{t('triggers.field')}</label>
+                          <select
+                            value={action.dps_key || '1'}
+                            onChange={(e) => updateAction(i, { dps_key: e.target.value })}
+                          >
+                            <option value="1">switch_1</option>
+                            <option value="2">switch_2</option>
+                            <option value="3">switch_3</option>
+                          </select>
+                        </div>
+                      )}
                       {action.action_type === 'tuya_set' && (() => {
-                        const dps = deviceMappings[action.device_id || '']?.mapping?.[action.dps_key || (dpsList.length > 0 ? dpsList[0][0] : '1')];
-                        if (!dps) return null;
-                        if (dps.type === 'Integer') {
+                        const dps = action.device_id
+                          ? deviceMappings[action.device_id]?.mapping?.[action.dps_key || (dpsList.length > 0 ? dpsList[0][0] : '1')]
+                          : undefined;
+                        const dpsType = dps?.type;
+                        const dpsValues = dps?.values;
+
+                        if (dpsType === 'Integer') {
                           return (
                             <div className="form-group">
-                              <label>{t('triggers.setValue')} ({dps.code} [{dps.values.min ?? 0}~{dps.values.max ?? ''}])</label>
+                              <label>{t('triggers.setValue')} ({dps!.code} [{dpsValues?.min ?? 0}~{dpsValues?.max ?? ''}])</label>
                               <input
                                 type="number"
                                 value={String(action.params?.value ?? '')}
                                 onChange={(e) => updateActionParams(i, { value: parseFloat(e.target.value) || 0 })}
-                                placeholder={`${dps.values.min ?? 0}~${dps.values.max ?? ''}`}
+                                placeholder={dpsValues ? `${dpsValues.min ?? 0}~${dpsValues.max ?? ''}` : ''}
                               />
                             </div>
                           );
                         }
-                        if (dps.type === 'Enum' && dps.values.range) {
+                        if (dpsType === 'Enum' && dpsValues?.range) {
                           return (
                             <div className="form-group">
-                              <label>{t('triggers.setValue')} ({dps.code})</label>
+                              <label>{t('triggers.setValue')} ({dps!.code})</label>
                               <select
                                 value={String(action.params?.value ?? '')}
                                 onChange={(e) => updateActionParams(i, { value: e.target.value })}
                               >
                                 <option value="">{t('triggers.selectValue')}</option>
-                                {dps.values.range.map((v) => (
+                                {dpsValues.range.map((v) => (
                                   <option key={v} value={v}>{v}</option>
                                 ))}
                               </select>
                             </div>
                           );
                         }
-                        if (dps.type === 'Boolean') {
+                        if (dpsType === 'Boolean') {
                           return (
                             <div className="form-group">
-                              <label>{t('triggers.setValue')} ({dps.code})</label>
+                              <label>{t('triggers.setValue')} ({dps!.code})</label>
                               <select
                                 value={String(action.params?.value ?? '')}
                                 onChange={(e) => updateActionParams(i, { value: e.target.value === 'true' })}
@@ -1038,11 +1083,12 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                         }
                         return (
                           <div className="form-group">
-                            <label>{t('triggers.setValue')} ({dps.code})</label>
+                            <label>{t('triggers.setValue')}</label>
                             <input
                               type="text"
                               value={String(action.params?.value ?? '')}
                               onChange={(e) => updateActionParams(i, { value: e.target.value })}
+                              placeholder={t('triggers.setValue')}
                             />
                           </div>
                         );
