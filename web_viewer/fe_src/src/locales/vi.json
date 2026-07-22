@@ -167,6 +167,7 @@
     "actionType": "Loại hành động",
     "device": "Thiết bị",
     "selectDevice": "Chọn thiết bị...",
+    "field": "Trường",
     "notifTitle": "Tiêu đề thông báo",
     "notifTitlePlaceholder": "VD: Mất điện lưới",
     "notifBody": "Nội dung thông báo",

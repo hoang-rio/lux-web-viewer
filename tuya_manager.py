@@ -197,6 +197,35 @@ def delete_device(device_id: str, db_conn: sqlite3.Connection) -> bool:
     return cursor.rowcount > 0
 
 
+async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list[str]) -> dict:
+    """Fetch live status for multiple devices in parallel."""
+    loop = asyncio.get_event_loop()
+    rows = db_conn.execute(
+        "SELECT id, ip, local_key, protocol_version FROM tuya_devices WHERE id IN ({})".format(
+            ",".join("?" * len(device_ids))
+        ),
+        device_ids,
+    ).fetchall()
+    results: dict[str, dict] = {}
+
+    def _fetch_one(row):
+        return row[0], _sync_get_status(row[0], row[1], row[2], row[3])
+
+    tasks = [loop.run_in_executor(None, _fetch_one, row) for row in rows]
+    done = await asyncio.gather(*tasks, return_exceptions=True)
+    for item in done:
+        if isinstance(item, Exception):
+            continue
+        dev_id, data = item
+        if isinstance(data, dict) and "dps" in data:
+            results[dev_id] = {"dps": data["dps"]}
+        elif isinstance(data, dict) and "error" in data:
+            results[dev_id] = {"error": data["error"]}
+        else:
+            results[dev_id] = {"dps": {}}
+    return results
+
+
 def get_device_mappings() -> dict:
     """Read devices.json from tinytuya wizard and return DPS mappings per device.
 

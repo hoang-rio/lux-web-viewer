@@ -260,6 +260,10 @@ def _update_last_triggered(trigger_id: int, now: datetime, db_conn: sqlite3.Conn
 
 
 def _parse_trigger_row(row) -> dict:
+    action_params_raw = json.loads(row[9]) if row[9] else None
+    actions_list = None
+    if isinstance(action_params_raw, dict) and "actions" in action_params_raw and isinstance(action_params_raw["actions"], list):
+        actions_list = action_params_raw["actions"]
     return {
         "id": row[0],
         "name": row[1],
@@ -268,9 +272,10 @@ def _parse_trigger_row(row) -> dict:
         "when_end_time": row[4],
         "when_days": row[5],
         "conditions": json.loads(row[6]) if row[6] else [],
+        "actions": actions_list,
         "action_type": row[7],
         "action_device_id": row[8],
-        "action_params": json.loads(row[9]) if row[9] else None,
+        "action_params": action_params_raw,
         "cooldown_seconds": row[10],
         "last_triggered_at": row[11],
         "created_at": row[12],

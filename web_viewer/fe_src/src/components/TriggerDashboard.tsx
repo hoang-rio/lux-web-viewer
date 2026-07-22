@@ -30,37 +30,13 @@ function getDeviceDpsList(deviceId: string | null | undefined, mappings: Record<
   return Object.entries(mappings[deviceId].mapping);
 }
 
-function getActionTypeOptions(dpsList: [string, IDpsMapping][]): { value: string; label: string }[] {
-  const options = [
+function getActionTypeOptions(): { value: string; label: string }[] {
+  return [
     { value: 'notification', label: 'triggers.actionNotification' },
+    { value: 'tuya_on', label: 'triggers.actionTurnOn' },
+    { value: 'tuya_off', label: 'triggers.actionTurnOff' },
+    { value: 'tuya_set', label: 'triggers.actionSetValue' },
   ];
-  for (const [dpsKey, dps] of dpsList) {
-    const label = dps.code || dpsKey;
-    if (dps.type === 'Boolean') {
-      options.push({ value: `tuya_on:${dpsKey}`, label: `${label} → ${'ON'}` });
-      options.push({ value: `tuya_off:${dpsKey}`, label: `${label} → ${'OFF'}` });
-    } else if (dps.type === 'Integer') {
-      options.push({ value: `tuya_set:${dpsKey}`, label: `${label} → ${'SET'}` });
-    } else if (dps.type === 'Enum') {
-      options.push({ value: `tuya_set:${dpsKey}`, label: `${label} → ${'SET'}` });
-    }
-  }
-  if (options.length === 1) {
-    options.push({ value: 'tuya_on:1', label: 'triggers.actionTurnOn' });
-    options.push({ value: 'tuya_off:1', label: 'triggers.actionTurnOff' });
-  }
-  return options;
-}
-
-function parseActionValue(actionValue: string): { action_type: string; dps_key: string } {
-  const parts = actionValue.split(':');
-  if (parts.length === 2) return { action_type: parts[0], dps_key: parts[1] };
-  return { action_type: actionValue, dps_key: '1' };
-}
-
-function buildActionValue(actionType: string, dpsKey: string | undefined): string {
-  if (actionType === 'notification') return 'notification';
-  return `${actionType}:${dpsKey || '1'}`;
 }
 
 function formatDays(daysStr: string | null, t: (key: string) => string): string {
@@ -127,23 +103,29 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   }, []);
 
   const fetchDeviceStatuses = useCallback(async (devs: ITuyaDevice[]) => {
-    const statuses: Record<string, boolean> = {};
-    await Promise.all(
-      devs.map(async (d) => {
-        try {
-          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/${d.id}/status`, { method: 'POST' });
-          const data = await res.json();
-          if (data && data.dps) {
-            statuses[d.id] = Boolean(data.dps['1']);
-          } else if (data && data.dps === undefined && data.success !== undefined) {
-            statuses[d.id] = Boolean(data.success);
+    if (devs.length === 0) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/batch-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: devs.map((d) => d.id) }),
+      });
+      const data = await res.json();
+      if (data.success && data.statuses) {
+        const statuses: Record<string, boolean> = {};
+        for (const [id, st] of Object.entries(data.statuses)) {
+          const s = st as { dps?: Record<string, unknown>; error?: string };
+          if (s.dps) {
+            statuses[id] = Boolean(s.dps['1']);
+          } else if (s.error) {
+            statuses[id] = false;
           }
-        } catch {
-          statuses[d.id] = false;
         }
-      })
-    );
-    setDeviceStatuses(statuses);
+        setDeviceStatuses(statuses);
+      }
+    } catch (err) {
+      logUtil.error('Batch status fetch failed', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -160,6 +142,12 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
       fetchDeviceStatuses(devices);
     }
   }, [devices, fetchDeviceStatuses]);
+
+  useEffect(() => {
+    if (activeTab === 'devices' && devices.length > 0) {
+      fetchDeviceStatuses(devices);
+    }
+  }, [activeTab, devices, fetchDeviceStatuses]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -910,20 +898,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
             <h4>{t('triggers.actionSection')}</h4>
             {actions.map((action, i) => {
               const dpsList = getDeviceDpsList(action.device_id, deviceMappings);
-              let actionOptions: { value: string; label: string }[];
-              if (dpsList.length === 0) {
-                actionOptions = [
-                  { value: 'tuya_on:1', label: t('triggers.actionTurnOn') },
-                  { value: 'tuya_off:1', label: t('triggers.actionTurnOff') },
-                  { value: 'notification', label: t('triggers.actionNotification') },
-                ];
-              } else {
-                actionOptions = getActionTypeOptions(dpsList);
-              }
-
-              const currentActionValue = action.action_type === 'notification'
-                ? 'notification'
-                : buildActionValue(action.action_type, action.dps_key);
+              const actionOptions = getActionTypeOptions();
 
               return (
                 <div key={i} className="action-row">
@@ -942,22 +917,17 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                   <div className="form-group">
                     <label>{t('triggers.actionType')}</label>
                     <select
-                      value={currentActionValue}
+                      value={action.action_type}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'notification') {
-                          updateAction(i, { action_type: 'notification', device_id: null, dps_key: undefined });
-                        } else {
-                          const parsed = parseActionValue(val);
-                          updateAction(i, { action_type: parsed.action_type, device_id: action.device_id, dps_key: parsed.dps_key });
-                        }
+                        const newType = e.target.value;
+                        updateAction(i, { action_type: newType });
                       }}
                     >
                       {action.action_type === 'notification' && !actionOptions.find(o => o.value === 'notification') && (
                         <option value="notification">{t('triggers.actionNotification')}</option>
                       )}
                       {actionOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <option key={opt.value} value={opt.value}>{t(opt.label)}</option>
                       ))}
                     </select>
                   </div>
@@ -995,7 +965,6 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                             updateAction(i, {
                               device_id: newDeviceId,
                               dps_key: firstDps ? firstDps[0] : '1',
-                              action_type: firstDps && firstDps[1].type === 'Boolean' ? 'tuya_on' : 'tuya_set',
                             });
                           }}
                         >
@@ -1005,8 +974,23 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           ))}
                         </select>
                       </div>
+                      {action.device_id && dpsList.length > 0 && (
+                        <div className="form-group">
+                          <label>{t('triggers.field')}</label>
+                          <select
+                            value={action.dps_key || (dpsList.length > 0 ? dpsList[0][0] : '1')}
+                            onChange={(e) => updateAction(i, { dps_key: e.target.value })}
+                          >
+                            {dpsList.map(([key, dps]) => (
+                              <option key={key} value={key}>
+                                {dps.code || key} ({dps.type})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       {action.action_type === 'tuya_set' && (() => {
-                        const dps = deviceMappings[action.device_id || '']?.mapping?.[action.dps_key || '1'];
+                        const dps = deviceMappings[action.device_id || '']?.mapping?.[action.dps_key || (dpsList.length > 0 ? dpsList[0][0] : '1')];
                         if (!dps) return null;
                         if (dps.type === 'Integer') {
                           return (
@@ -1033,6 +1017,21 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                                 {dps.values.range.map((v) => (
                                   <option key={v} value={v}>{v}</option>
                                 ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        if (dps.type === 'Boolean') {
+                          return (
+                            <div className="form-group">
+                              <label>{t('triggers.setValue')} ({dps.code})</label>
+                              <select
+                                value={String(action.params?.value ?? '')}
+                                onChange={(e) => updateActionParams(i, { value: e.target.value === 'true' })}
+                              >
+                                <option value="">--</option>
+                                <option value="true">{t('triggers.testOn')}</option>
+                                <option value="false">{t('triggers.testOff')}</option>
                               </select>
                             </div>
                           );

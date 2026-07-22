@@ -503,6 +503,20 @@ async def get_device_status(request: web.Request):
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def batch_device_status(request: web.Request):
+    try:
+        data = await request.json()
+        ids = data.get("ids") if isinstance(data, dict) else None
+        if not ids or not isinstance(ids, list):
+            return web.json_response({"success": False, "message": "ids list required"}, status=400)
+        conn = get_db_connection()
+        statuses = await tuya_manager.get_devices_status_batch(conn, ids)
+        return web.json_response({"success": True, "statuses": statuses})
+    except Exception as e:
+        logger.error("Error in batch_device_status: %s", e)
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
 async def control_device(request: web.Request):
     try:
         device_id = request.match_info.get("id")
@@ -694,6 +708,7 @@ def create_runner():
         web.post("/tuya-devices", add_tuya_device),
         web.delete("/tuya-devices/{id}", delete_tuya_device),
         web.post("/tuya-devices/{id}/status", get_device_status),
+        web.post("/tuya-devices/batch-status", batch_device_status),
         web.post("/tuya-devices/{id}/control", control_device),
         web.get("/triggers", get_triggers),
         web.post("/triggers", save_trigger_route),

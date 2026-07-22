@@ -169,6 +169,7 @@
     "actionType": "Action Type",
     "device": "Device",
     "selectDevice": "Select a device...",
+    "field": "Field",
     "notifTitle": "Notification Title",
     "notifTitlePlaceholder": "e.g. Grid Lost",
     "notifBody": "Notification Body",

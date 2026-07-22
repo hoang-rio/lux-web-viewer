@@ -14,7 +14,7 @@
 .trigger-dashboard {
     background: #fff;
     border-radius: 8px;
-    width: 520px;
+    width: 700px;
     max-width: 95vw;
     max-height: 85vh;
     display: flex;
@@ -387,7 +387,8 @@
     color: #007bff;
     cursor: pointer;
     font-size: 12px;
-    margin-top: 4px;
+    margin-top: 8px;
+    margin-bottom: 4px;
     transition: background-color 0.15s;
 }
 
@@ -529,8 +530,8 @@
     .trigger-actions .test-btn { background: #3a3a3a; color: #eee; border-color: #666; }
     .trigger-actions .test-btn:hover { background: #4a4a4a; }
 
-    .add-trigger-btn { background: #1a5a9e; }
-    .add-trigger-btn:hover { background: #2070b8; }
+    .add-trigger-btn { background: #007bff; }
+    .add-trigger-btn:hover { background: #0069d9; }
 
     .form-section { border-color: #444; background: #333; }
     .form-section h4 { color: #eee; }
