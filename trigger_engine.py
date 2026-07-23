@@ -222,15 +222,13 @@ def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connect
 
 
 def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.Connection):
-    """Send an FCM push notification."""
+    """Send an FCM push notification and log to notification_history."""
     if params is None:
         params = {}
     title = params.get("notification_title", trigger.get("name", "Trigger Alert"))
     body = params.get("notification_body", f"Trigger '{trigger.get('name')}' fired.")
     try:
-        from web_viewer import get_db_connection
         from fcm import FCM
-        import settings as app_settings
 
         config = {}
         try:
@@ -241,14 +239,18 @@ def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.C
             pass
         fcm = FCM(logger, config)
         fcm.send_notification(title, body)
-        db_conn.execute(
-            "INSERT INTO notification_history (notified_at, title, body) VALUES (?, ?, ?)",
-            (datetime.now().isoformat(), title, body),
-        )
-        db_conn.commit()
         logger.info("Sent notification from trigger '%s': %s - %s", trigger["name"], title, body)
     except Exception as e:
         logger.error("Failed to send notification for trigger '%s': %s", trigger["name"], e)
+        # Still log to history even if FCM fails
+        try:
+            db_conn.execute(
+                "INSERT INTO notification_history (notified_at, title, body) VALUES (?, ?, ?)",
+                (datetime.now().isoformat(), title, body),
+            )
+            db_conn.commit()
+        except Exception:
+            pass
 
 
 def _update_last_triggered(trigger_id: int, now: datetime, db_conn: sqlite3.Connection):

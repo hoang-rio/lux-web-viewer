@@ -1002,7 +1002,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           ))}
                         </select>
                       </div>
-                      {action.device_id && dpsList.length > 0 && (
+                      {action.device_id && action.action_type === 'tuya_set' && dpsList.length > 0 && (
                         <div className="form-group">
                           <label>{t('triggers.field')}</label>
                           <select
@@ -1017,7 +1017,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           </select>
                         </div>
                       )}
-                      {action.device_id && dpsList.length === 0 && (
+                      {action.device_id && action.action_type === 'tuya_set' && dpsList.length === 0 && (
                         <div className="form-group">
                           <label>{t('triggers.field')}</label>
                           <select
