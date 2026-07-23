@@ -177,4 +177,5 @@ export interface ITriggerHistory {
   triggered_at: string;
   status: string;
   message: string;
+  actions_detail?: string;
 }

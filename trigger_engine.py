@@ -39,10 +39,10 @@ def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
             )
             try:
                 _execute_actions(trigger, actions, db_conn)
-                add_trigger_history(trigger["id"], "success", action_desc, db_conn)
+                add_trigger_history(trigger["id"], "success", action_desc, db_conn, actions_detail=json.dumps(actions))
             except Exception as e:
                 logger.error("Failed to execute actions for trigger '%s': %s", trigger["name"], e)
-                add_trigger_history(trigger["id"], "error", str(e), db_conn)
+                add_trigger_history(trigger["id"], "error", str(e), db_conn, actions_detail=json.dumps(actions))
             _update_last_triggered(trigger["id"], now, db_conn)
     except Exception as e:
         logger.error("Error evaluating triggers: %s", e)
@@ -365,11 +365,11 @@ def delete_trigger(trigger_id: int, db_conn: sqlite3.Connection) -> bool:
     return cursor.rowcount > 0
 
 
-def add_trigger_history(trigger_id: int, status: str, message: str, db_conn: sqlite3.Connection):
+def add_trigger_history(trigger_id: int, status: str, message: str, db_conn: sqlite3.Connection, actions_detail: str = ""):
     """Save trigger execution history. Keeps max 10 records per trigger."""
     db_conn.execute(
-        "INSERT INTO trigger_history (trigger_id, triggered_at, status, message) VALUES (?, ?, ?, ?)",
-        (trigger_id, datetime.now().isoformat(), status, message),
+        "INSERT INTO trigger_history (trigger_id, triggered_at, status, message, actions_detail) VALUES (?, ?, ?, ?, ?)",
+        (trigger_id, datetime.now().isoformat(), status, message, actions_detail),
     )
     # Keep only latest 10 per trigger
     db_conn.execute(
@@ -383,11 +383,11 @@ def add_trigger_history(trigger_id: int, status: str, message: str, db_conn: sql
 def get_trigger_history(trigger_id: int, db_conn: sqlite3.Connection) -> list[dict]:
     """Get trigger execution history ordered by date descending."""
     rows = db_conn.execute(
-        "SELECT id, trigger_id, triggered_at, status, message FROM trigger_history "
+        "SELECT id, trigger_id, triggered_at, status, message, actions_detail FROM trigger_history "
         "WHERE trigger_id = ? ORDER BY triggered_at DESC",
         (trigger_id,),
     ).fetchall()
     return [
-        {"id": r[0], "trigger_id": r[1], "triggered_at": r[2], "status": r[3], "message": r[4]}
+        {"id": r[0], "trigger_id": r[1], "triggered_at": r[2], "status": r[3], "message": r[4], "actions_detail": r[5] or ""}
         for r in rows
     ]

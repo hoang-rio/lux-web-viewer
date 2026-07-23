@@ -582,7 +582,8 @@ async def test_trigger_route(request: web.Request):
         trigger_engine._execute_actions(tr, actions, conn)
         trigger_engine._update_last_triggered(trigger_id, now, conn)
         action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
-        trigger_engine.add_trigger_history(trigger_id, "success", f"Manual test: {action_desc}", conn)
+        import json as _json
+        trigger_engine.add_trigger_history(trigger_id, "success", f"Manual test: {action_desc}", conn, actions_detail=_json.dumps(actions))
         return web.json_response({"success": True})
     except Exception as e:
         logger.error("Error in test_trigger: %s", e)
