@@ -54,6 +54,32 @@ Web server tích hợp cung cấp các API thân thiện với thiết bị di �
 * Bây giờ bạn có thể xem giao diện web LuxPower theo thời gian thực tại http://localhost:88 (hoặc ở cổng khác nếu bạn thay đổi `PORT` trong `.env`).
 * HTTPS cũng được hỗ trợ; bật bằng cách đặt `HTTPS_ENABLED=true` và cung cấp `HTTPS_PORT`, `HTTPS_CERT_FILE`, `HTTPS_KEY_FILE` trong `.env`.
 
+## Tự động hóa thiết bị Tuya
+Ứng dụng bao gồm hệ thống kích hoạt/tự động hóa tích hợp có thể điều khiển thiết bị Tuya thông minh và gửi thông báo dựa trên dữ liệu biến tần.
+
+### Cách hoạt động
+Mỗi quy tắc kích hoạt theo mô hình **Khi → Điều kiện → Hành động**:
+* **Khi**: Khung thời gian và ngày trong tuần tùy chọn (ví dụ: chỉ từ 08:00–18:00 các ngày trong tuần)
+* **Điều kiện**: Một hoặc nhiều điều kiện phải được đáp ứng (ví dụ: SOC < 30%, công suất PV > 2000W, hoặc giá trị DPS của thiết bị Tuya)
+* **Hành động**: Thực hiện một hoặc nhiều hành động khi tất cả điều kiện được đáp ứng (ví dụ: bật relay, đặt giá trị DPS, hoặc gửi thông báo)
+
+### Thiết lập
+1. Chạy tinytuya wizard (`python -m tinytuya wizard`) để khám phá thiết bị Tuya trên mạng và tạo `devices.json`
+2. Thêm thiết bị trong tab **Cài đặt → Thiết bị** (hoặc tự động nhập từ `devices.json`)
+3. Tạo quy tắc kích hoạt trong tab **Cài đặt → Kích hoạt**
+4. Đặt `ADMIN_ALLOWED_CIDR` trong `.env` để cho phép truy cập từ xa vào cấu hình kích hoạt
+
+### Tính năng
+* Điều khiển bất kỳ thiết bị Tuya nào trên mạng cục bộ (bật/tắt, chuyển đổi, đặt giá trị) qua Wi-Fi
+* Điều kiện dựa trên dữ liệu biến tần (SOC, công suất PV, công suất lưới, nhiệt độ pin, v.v.) hoặc giá trị DPS thiết bị Tuya
+* Hỗ trợ nhiều hành động cho mỗi quy tắc kích hoạt
+* Thời gian chờ để tránh kích hoạt lặp lại
+* Lịch sử thực hiện với chi tiết hành động (lưu 10 bản ghi gần nhất mỗi quy tắc)
+* Thông báo đẩy qua Firebase Cloud Messaging (FCM)
+* Thử nghiệm kích hoạt thủ công từ giao diện
+
+> **Lưu ý**: Thiết bị Tuya phải nằm trên cùng mạng cục bộ. Ứng dụng sử dụng `tinytuya` để điều khiển trực tiếp thiết bị — không cần API đám mây.
+
 <center>
 <picture style="max-width: 800px">
     <source srcset="misc/screenshot-light-vi.png" media="(prefers-color-scheme: light)"/>

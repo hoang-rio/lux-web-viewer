@@ -54,6 +54,32 @@ The built-in web server exposes mobile-friendly APIs:
 * Now you can see LuxPower realtime web viewer in http://localhost:88 (or another port if you changed `PORT` in `.env`).
 * HTTPS is also supported; enable it by setting `HTTPS_ENABLED=true` and providing `HTTPS_PORT`, `HTTPS_CERT_FILE`, and `HTTPS_KEY_FILE` in `.env`.
 
+## Tuya Device Automation
+The app includes a built-in trigger/automation system that can control Tuya smart devices and send push notifications based on inverter data conditions.
+
+### How it works
+Each trigger follows a **When → Conditions → Action** model:
+* **When**: Optional time window and day-of-week filter (e.g. only on weekdays from 08:00–18:00)
+* **Conditions**: One or more conditions that must all be met (e.g. SOC < 30%, PV power > 2000W, or a Tuya device DPS value)
+* **Action**: Execute one or more actions when all conditions are met (e.g. turn on a relay, set a DPS value, or send a push notification)
+
+### Setup
+1. Run tinytuya wizard (`python -m tinytuya wizard`) to discover Tuya devices on your network and generate `devices.json`
+2. Add devices in **Settings → Devices** tab (or they are auto-imported from `devices.json`)
+3. Create triggers in **Settings → Triggers** tab
+4. Set `ADMIN_ALLOWED_CIDR` in `.env` to allow remote access to trigger configuration
+
+### Features
+* Control any local Tuya device (on/off, toggle, set value) via Wi-Fi
+* Conditions based on inverter data (SOC, PV power, grid power, battery temperature, etc.) or Tuya device DPS values
+* Support for multiple actions per trigger
+* Cooldown period to prevent rapid re-triggering
+* Execution history with detailed action logs (last 10 per trigger)
+* Push notifications via Firebase Cloud Messaging (FCM)
+* Test triggers manually from the UI
+
+> **Note**: Tuya devices must be on the same local network. The app uses `tinytuya` for direct local device control — no cloud API required.
+
 <center>
 <picture style="max-width: 800px">
     <source srcset="misc/screenshot-light.png" media="(prefers-color-scheme: light)"/>
