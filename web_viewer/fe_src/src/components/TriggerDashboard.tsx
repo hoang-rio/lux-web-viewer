@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ITuyaDevice, ITrigger, ITriggerCondition, ITriggerAction, IScannedDevice, IDeviceMapping, IDpsMapping } from '../Intefaces';
+import { ITuyaDevice, ITrigger, ITriggerCondition, ITriggerAction, IScannedDevice, IDeviceMapping, IDpsMapping, ITriggerHistory } from '../Intefaces';
 import Loading from './Loading';
 import * as logUtil from '../utils/logUtil';
 import './TriggerDashboard.css';
@@ -61,6 +61,8 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const [wizardRun, setWizardRun] = useState<boolean>(true);
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, boolean>>({});
   const [deviceMappings, setDeviceMappings] = useState<Record<string, IDeviceMapping>>({});
+  const [historyTriggerId, setHistoryTriggerId] = useState<number | null>(null);
+  const [triggerHistory, setTriggerHistory] = useState<ITriggerHistory[]>([]);
 
   const fetchWizardStatus = useCallback(async () => {
     try {
@@ -273,6 +275,18 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
     }
   };
 
+  const handleShowHistory = async (triggerId: number) => {
+    setHistoryTriggerId(triggerId);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers/${triggerId}/history`);
+      const data = await res.json();
+      setTriggerHistory(data.history || []);
+    } catch (err) {
+      logUtil.error('Failed to fetch trigger history', err);
+      setTriggerHistory([]);
+    }
+  };
+
   if (loading) {
     return (
       <div className="trigger-dashboard-overlay">
@@ -367,6 +381,10 @@ function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               onDelete={handleDeleteTrigger}
               onTest={handleTestTrigger}
               onToggle={handleToggleTrigger}
+              onShowHistory={handleShowHistory}
+              historyTriggerId={historyTriggerId}
+              triggerHistory={triggerHistory}
+              onCloseHistory={() => { setHistoryTriggerId(null); setTriggerHistory([]); }}
             />
           )}
         </div>
@@ -493,9 +511,13 @@ interface TriggersTabProps {
   onDelete: (id: number) => void;
   onTest: (id: number) => void;
   onToggle: (t: ITrigger) => void;
+  onShowHistory: (id: number) => void;
+  historyTriggerId: number | null;
+  triggerHistory: ITriggerHistory[];
+  onCloseHistory: () => void;
 }
 
-function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelete, onTest, onToggle }: TriggersTabProps) {
+function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelete, onTest, onToggle, onShowHistory, historyTriggerId, triggerHistory, onCloseHistory }: TriggersTabProps) {
   const { t } = useTranslation();
 
   const resolveActions = (tr: ITrigger): ITriggerAction[] => {
@@ -533,7 +555,7 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
     const dev = devices.find((d) => d.id === a.device_id);
     const devName = dev?.name || a.device_id || '';
     let dpsLabel = '';
-    if (a.dps_key && a.device_id) {
+    if (a.action_type === 'tuya_set' && a.dps_key && a.device_id) {
       const mapping = deviceMappings[a.device_id];
       if (mapping?.mapping?.[a.dps_key]) {
         dpsLabel = ` [${mapping.mapping[a.dps_key].code}]`;
@@ -610,8 +632,30 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
               <div className="trigger-actions">
                 <button onClick={() => onEdit(tr)} className="edit-btn">{t('triggers.edit')}</button>
                 <button onClick={() => onTest(tr.id)} className="test-btn">{t('triggers.testNow')}</button>
+                <button onClick={() => onShowHistory(tr.id)} className="history-btn">{t('triggers.history')}</button>
                 <button onClick={() => onDelete(tr.id)} className="delete-btn">{t('triggers.delete')}</button>
               </div>
+              {historyTriggerId === tr.id && (
+                <div className="trigger-history-panel">
+                  <div className="trigger-history-header">
+                    <span>{t('triggers.history')}</span>
+                    <button className="close-popover" onClick={onCloseHistory}>×</button>
+                  </div>
+                  {triggerHistory.length === 0 ? (
+                    <div className="no-records">{t('triggers.noHistory')}</div>
+                  ) : (
+                    <div className="trigger-history-list">
+                      {triggerHistory.map((h) => (
+                        <div key={h.id} className={`trigger-history-item ${h.status}`}>
+                          <span className="history-time">{new Date(h.triggered_at).toLocaleString()}</span>
+                          <span className={`history-status ${h.status}`}>{h.status === 'success' ? '✓' : '✗'}</span>
+                          <span className="history-message">{h.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })

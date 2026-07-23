@@ -237,6 +237,8 @@
     "dayThu": "T5",
     "dayFri": "T6",
     "daySat": "T7",
-    "daySun": "CN"
+    "daySun": "CN",
+    "history": "Lịch sử",
+    "noHistory": "Chưa có lịch sử"
   }
 }

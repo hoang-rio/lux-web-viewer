@@ -239,6 +239,8 @@
     "dayThu": "Thu",
     "dayFri": "Fri",
     "daySat": "Sat",
-    "daySun": "Sun"
+    "daySun": "Sun",
+    "history": "History",
+    "noHistory": "No history records"
   }
 }

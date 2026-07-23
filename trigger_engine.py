@@ -37,7 +37,12 @@ def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
                 "Trigger '%s' (id=%s) conditions met, executing actions: %s",
                 trigger["name"], trigger["id"], action_desc,
             )
-            _execute_actions(trigger, actions, db_conn)
+            try:
+                _execute_actions(trigger, actions, db_conn)
+                add_trigger_history(trigger["id"], "success", action_desc, db_conn)
+            except Exception as e:
+                logger.error("Failed to execute actions for trigger '%s': %s", trigger["name"], e)
+                add_trigger_history(trigger["id"], "error", str(e), db_conn)
             _update_last_triggered(trigger["id"], now, db_conn)
     except Exception as e:
         logger.error("Error evaluating triggers: %s", e)
@@ -358,3 +363,31 @@ def delete_trigger(trigger_id: int, db_conn: sqlite3.Connection) -> bool:
     cursor = db_conn.execute("DELETE FROM automation_triggers WHERE id = ?", (trigger_id,))
     db_conn.commit()
     return cursor.rowcount > 0
+
+
+def add_trigger_history(trigger_id: int, status: str, message: str, db_conn: sqlite3.Connection):
+    """Save trigger execution history. Keeps max 10 records per trigger."""
+    db_conn.execute(
+        "INSERT INTO trigger_history (trigger_id, triggered_at, status, message) VALUES (?, ?, ?, ?)",
+        (trigger_id, datetime.now().isoformat(), status, message),
+    )
+    # Keep only latest 10 per trigger
+    db_conn.execute(
+        "DELETE FROM trigger_history WHERE trigger_id = ? AND id NOT IN "
+        "(SELECT id FROM trigger_history WHERE trigger_id = ? ORDER BY triggered_at DESC LIMIT 10)",
+        (trigger_id, trigger_id),
+    )
+    db_conn.commit()
+
+
+def get_trigger_history(trigger_id: int, db_conn: sqlite3.Connection) -> list[dict]:
+    """Get trigger execution history ordered by date descending."""
+    rows = db_conn.execute(
+        "SELECT id, trigger_id, triggered_at, status, message FROM trigger_history "
+        "WHERE trigger_id = ? ORDER BY triggered_at DESC",
+        (trigger_id,),
+    ).fetchall()
+    return [
+        {"id": r[0], "trigger_id": r[1], "triggered_at": r[2], "status": r[3], "message": r[4]}
+        for r in rows
+    ]

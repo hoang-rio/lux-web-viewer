@@ -187,6 +187,9 @@
 .edit-btn { background: #fff; color: #007bff; border-color: #007bff; }
 .edit-btn:hover { background: #007bff; color: white; }
 
+.history-btn { background: #fff; color: #17a2b8; border-color: #17a2b8; }
+.history-btn:hover { background: #17a2b8; color: white; }
+
 .tuya-only-notice {
     padding: 6px 10px;
     background: #e8f4fd;
@@ -280,6 +283,42 @@
     padding: 8px 12px;
     border-top: 1px solid #eee;
 }
+
+.trigger-history-panel {
+    border-top: 1px solid #eee;
+    padding: 8px 12px;
+    background: #fafafa;
+}
+
+.trigger-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.trigger-history-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.trigger-history-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.trigger-history-item:last-child { border-bottom: none; }
+
+.history-time { color: #666; flex-shrink: 0; }
+.history-status.success { color: #28a745; font-weight: bold; }
+.history-status.error { color: #dc3545; font-weight: bold; }
+.history-message { color: #444; }
 
 .trigger-form { padding: 16px; overflow-y: auto; flex: 1; }
 
@@ -512,6 +551,8 @@
     .delete-btn:hover { background: #a52020; color: #fff; }
     .edit-btn { background: #2a3a50; color: #4da3ff; border-color: #4da3ff; }
     .edit-btn:hover { background: #3a5070; }
+    .history-btn { background: #1a3355; color: #4da3ff; border-color: #4da3ff; }
+    .history-btn:hover { background: #2a5588; color: #fff; }
 
     .tuya-only-notice {
         background: #1a3355;
@@ -532,6 +573,11 @@
     .trigger-actions { border-top-color: #444; }
     .trigger-actions .test-btn { background: #3a3a3a; color: #eee; border-color: #666; }
     .trigger-actions .test-btn:hover { background: #4a4a4a; }
+    .trigger-history-panel { background: #2e2e2e; border-top-color: #444; }
+    .trigger-history-header { color: #eee; }
+    .trigger-history-item { border-bottom-color: #444; }
+    .history-time { color: #999; }
+    .history-message { color: #ccc; }
 
     .add-trigger-btn { background: #007bff; }
     .add-trigger-btn:hover { background: #0069d9; }

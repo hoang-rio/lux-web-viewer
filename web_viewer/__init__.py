@@ -239,7 +239,7 @@ async def register_fcm(request: web.Request):
                 token = str(payload.get("token", ""))
 
         result = register_device_token(
-            config.get("DEVICE_IDS_JSON_FILE", "devices.json"),
+            config.get("DEVICE_IDS_JSON_FILE", "fcm_devices.json"),
             token,
         )
         status = 200 if result["is_success"] else 400
@@ -581,10 +581,23 @@ async def test_trigger_route(request: web.Request):
         actions = trigger_engine._get_actions(tr)
         trigger_engine._execute_actions(tr, actions, conn)
         trigger_engine._update_last_triggered(trigger_id, now, conn)
+        action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
+        trigger_engine.add_trigger_history(trigger_id, "success", f"Manual test: {action_desc}", conn)
         return web.json_response({"success": True})
     except Exception as e:
         logger.error("Error in test_trigger: %s", e)
         return web.json_response({"success": False}, status=500)
+
+
+async def get_trigger_history_route(request: web.Request):
+    try:
+        trigger_id = int(request.match_info.get("id"))
+        conn = get_db_connection()
+        history = trigger_engine.get_trigger_history(trigger_id, conn)
+        return web.json_response({"history": history})
+    except Exception as e:
+        logger.error("Error in get_trigger_history: %s", e)
+        return web.json_response({"history": []})
 
 
 async def has_admin_access(request: web.Request):
@@ -714,6 +727,7 @@ def create_runner():
         web.post("/triggers", save_trigger_route),
         web.delete("/triggers/{id}", delete_trigger_route),
         web.post("/triggers/{id}/test", test_trigger_route),
+        web.get("/triggers/{id}/history", get_trigger_history_route),
         web.static("/", path.join(path.dirname(__file__), "build"))
     ])
     return web.AppRunner(app, access_log=None)

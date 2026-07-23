@@ -170,3 +170,11 @@ export interface IDeviceMapping {
   name: string;
   mapping: Record<string, IDpsMapping>;
 }
+
+export interface ITriggerHistory {
+  id: number;
+  trigger_id: number;
+  triggered_at: string;
+  status: string;
+  message: string;
+}
