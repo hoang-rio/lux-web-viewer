@@ -398,6 +398,7 @@
     font-size: 13px;
     min-width: 0;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .condition-value {
@@ -408,6 +409,7 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 13px;
+    box-sizing: border-box;
 }
 
 .remove-btn {
