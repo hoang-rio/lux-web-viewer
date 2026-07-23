@@ -164,7 +164,8 @@
 .register-btn,
 .test-btn,
 .delete-btn,
-.edit-btn {
+.edit-btn,
+.history-btn {
     padding: 4px 10px;
     border: 1px solid #ccc;
     border-radius: 4px;

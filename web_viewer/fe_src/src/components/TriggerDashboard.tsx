@@ -566,6 +566,26 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
     return { typeLabel, targetLabel: `${devName}${dpsLabel}` };
   };
 
+  const translateHistoryMessage = (msg: string): string => {
+    if (!msg) return '';
+    const actionMap: Record<string, string> = {
+      tuya_on: t('triggers.actionTurnOn'),
+      tuya_off: t('triggers.actionTurnOff'),
+      tuya_toggle: t('triggers.actionToggle'),
+      tuya_set: t('triggers.actionSetValue'),
+      notification: t('triggers.actionNotification'),
+    };
+    return msg.split(',').map((part) => {
+      const trimmed = part.trim();
+      const manualPrefix = 'Manual test: ';
+      if (trimmed.startsWith(manualPrefix)) {
+        const actionPart = trimmed.slice(manualPrefix.length);
+        return `${t('triggers.testNow')}: ${actionMap[actionPart.trim()] || actionPart.trim()}`;
+      }
+      return actionMap[trimmed] || trimmed;
+    }).join(', ');
+  };
+
   return (
     <div className="triggers-tab">
       <div className="triggers-actions">
@@ -602,7 +622,7 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
                   <strong>{t('triggers.if')}:</strong>{' '}
                   {tr.conditions.map((c, i) => (
                     <span key={i}>
-                      {i > 0 && ' AND '}
+                      {i > 0 && ` ${t('triggers.and')} `}
                       {resolveConditionLabel(c)}
                     </span>
                   ))}
@@ -649,7 +669,7 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
                         <div key={h.id} className={`trigger-history-item ${h.status}`}>
                           <span className="history-time">{new Date(h.triggered_at).toLocaleString()}</span>
                           <span className={`history-status ${h.status}`}>{h.status === 'success' ? '✓' : '✗'}</span>
-                          <span className="history-message">{h.message}</span>
+                          <span className="history-message">{translateHistoryMessage(h.message)}</span>
                         </div>
                       ))}
                     </div>
@@ -788,6 +808,7 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                       device_id: ct === 'device' ? (cond.device_id || '') : undefined,
                       dps_key: ct === 'device' ? (cond.dps_key || '1') : undefined,
                       dps_code: ct === 'device' ? (cond.dps_code || '') : undefined,
+                      op: ct === 'device' ? '==' : (cond.op || '>='),
                       compare_value: ct === 'device' ? (cond.compare_value ?? '') : undefined,
                       value: ct === 'inverter' ? (cond.value ?? 0) : undefined,
                     });
@@ -856,14 +877,23 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                         </select>
                       );
                     })()}
-                    <select
-                      value={cond.op || '=='}
-                      onChange={(e) => updateCondition(i, { op: e.target.value })}
-                    >
-                      {CONDITION_OPS.map((op) => (
-                        <option key={op} value={op}>{op}</option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const dps = cond.device_id
+                        ? deviceMappings[cond.device_id]?.mapping?.[cond.dps_key || '1']
+                        : undefined;
+                      const dpsType = dps?.type;
+                      const comparisonOps = dpsType === 'Integer' ? CONDITION_OPS : ['==', '!='];
+                      return (
+                        <select
+                          value={cond.op || '=='}
+                          onChange={(e) => updateCondition(i, { op: e.target.value })}
+                        >
+                          {comparisonOps.map((op) => (
+                            <option key={op} value={op}>{op}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                     {(() => {
                       const dps = cond.device_id
                         ? deviceMappings[cond.device_id]?.mapping?.[cond.dps_key || '1']

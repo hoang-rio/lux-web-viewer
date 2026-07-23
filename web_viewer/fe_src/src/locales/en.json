@@ -241,6 +241,7 @@
     "daySat": "Sat",
     "daySun": "Sun",
     "history": "History",
-    "noHistory": "No history records"
+    "noHistory": "No history records",
+    "and": "AND"
   }
 }

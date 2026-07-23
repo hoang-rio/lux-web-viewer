@@ -239,6 +239,7 @@
     "daySat": "T7",
     "daySun": "CN",
     "history": "Lịch sử",
-    "noHistory": "Chưa có lịch sử"
+    "noHistory": "Chưa có lịch sử",
+    "and": "VÀ"
   }
 }
