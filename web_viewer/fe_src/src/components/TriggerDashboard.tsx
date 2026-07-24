@@ -611,6 +611,7 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
           tuya_off: t('triggers.actionTurnOff'),
           tuya_toggle: t('triggers.actionToggle'),
           tuya_set: t('triggers.actionSetValue'),
+          play_audio: t('triggers.actionPlayAudio')
         };
         const typeLabel = typeMap[a.action_type] || a.action_type;
         if (a.action_type === 'tuya_set') {
@@ -619,6 +620,10 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
           const dps = mapping?.mapping?.[a.dps_key || ''];
           const dpsLabel = dps?.code || a.dps_key || '';
           return `${typeLabel} ${devName}${dpsLabel ? ` [${dpsLabel}]` : ''} = ${val}`;
+        }
+        if (a.action_type === 'play_audio') {
+          const audioUrl = a.params?.audio_url ?? '';
+          return `${typeLabel} ${audioUrl}`;
         }
         const mapping = deviceMappings[a.device_id || ''];
         const dps = mapping?.mapping?.[a.dps_key || ''];
