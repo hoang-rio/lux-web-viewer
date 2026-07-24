@@ -86,3 +86,96 @@ export interface INotificationData {
   notified_at: string | number;
   read: number;
 }
+
+export interface ITuyaDevice {
+  id: string;
+  name: string;
+  ip: string;
+  local_key: string;
+  protocol_version: string;
+  device_type: string;
+  created_at: string;
+}
+
+export interface ITriggerCondition {
+  condition_type?: 'inverter' | 'device';
+  field?: string;
+  device_id?: string;
+  dps_key?: string;
+  dps_code?: string;
+  op: string;
+  value?: number;
+  compare_value?: string | number | boolean;
+}
+
+export interface ITriggerAction {
+  action_type: string;
+  device_id: string | null;
+  dps_key?: string;
+  params?: {
+    dp?: number;
+    value?: boolean | number | string;
+    notification_title?: string;
+    notification_body?: string;
+  };
+}
+
+export interface ITriggerActionParams {
+  dp?: number;
+  value?: boolean | number | string;
+  notification_title?: string;
+  notification_body?: string;
+}
+
+export interface ITrigger {
+  id: number;
+  name: string;
+  enabled: boolean;
+  when_start_time: string | null;
+  when_end_time: string | null;
+  when_days: string | null;
+  conditions: ITriggerCondition[];
+  actions?: ITriggerAction[];
+  action_type: string;
+  action_device_id: string | null;
+  action_params: ITriggerActionParams | null;
+  cooldown_seconds: number;
+  last_triggered_at: string | null;
+  created_at: string;
+}
+
+export interface IScannedDevice {
+  ip: string;
+  gwId: string;
+  version: string;
+  product_id: string;
+  name: string;
+  local_key: string;
+}
+
+export interface IDpsMapping {
+  code: string;
+  type: 'Boolean' | 'Integer' | 'Enum' | 'String' | 'Raw';
+  values: {
+    unit?: string;
+    min?: number;
+    max?: number;
+    scale?: number;
+    step?: number;
+    range?: string[];
+  };
+}
+
+export interface IDeviceMapping {
+  name: string;
+  mapping: Record<string, IDpsMapping>;
+}
+
+export interface ITriggerHistory {
+  id: number;
+  trigger_id: number;
+  triggered_at: string;
+  status: string;
+  message: string;
+  actions_detail?: string;
+}

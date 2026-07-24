@@ -320,3 +320,28 @@ class FCM():
                 t.start()
             self.__post_send_notify(devices)
         self.__log_notification(notify_title, notify_body)
+
+    def send_notification(self, title: str, body: str, channel_id: str = CHANNEL_GENERAL):
+        """Send a notification to all registered devices (used by trigger engine)."""
+        self.__fcm_threads = []
+        devices = self.__get_devices()
+        if len(devices) == 0:
+            self.__logger.info("TRIGGER_NOTIFY: No device to notify")
+        else:
+            self.__logger.info(
+                "TRIGGER_NOTIFY: Start send notification to %d devices", len(devices)
+            )
+            for device in devices:
+                t = FCMThread(
+                    self.__logger,
+                    self.__config,
+                    title,
+                    body,
+                    device,
+                    True,
+                    channel_id,
+                )
+                self.__fcm_threads.append(t)
+                t.start()
+            self.__post_send_notify(devices)
+        self.__log_notification(title, body)

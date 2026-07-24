@@ -6,6 +6,7 @@ import './SettingsPopover.css';
 
 interface SettingsPopoverProps {
   onClose: () => void;
+  onOpenTriggers: () => void;
 }
 
 interface Settings {
@@ -25,7 +26,7 @@ interface Settings {
   AUTH_BYPASS_CIDR: string;
 }
 
-const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose }, ref) => {
+const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers }, ref) => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [originalSettings, setOriginalSettings] = useState<Settings | null>(null);
@@ -199,6 +200,13 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
       <div className="notification-popover-content">
         <div className="notification-popover-header">
           <h3>{t("settings.title")}</h3>
+          <button
+            className="triggers-dashboard-btn"
+            onClick={onOpenTriggers}
+            title={t("triggers.title")}
+          >
+            ⚡
+          </button>
           {message && (
             <div className={`settings-message ${message.type}`}>
               {message.text}

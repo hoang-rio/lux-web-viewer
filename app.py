@@ -14,6 +14,7 @@ import asyncio
 from web_socket_client import WebSocketClient
 import settings
 import database
+import trigger_engine
 
 DONGLE_MODE = "DONGLE"
 SERVER_MODE = "SERVER"
@@ -264,6 +265,7 @@ ________Status: \"%s\" (%s) at deviceTime: %s with fac: %s Hz and vacr: %s V____
     dectect_off_grid_warning(
         is_grid_connected, json_data["p_pv"], json_data["p_eps"], json_data["soc"], fcm_service)
     detect_battery_full(json_data["soc"], fcm_service, db_connection)
+    trigger_engine.evaluate_triggers(json_data, db_connection)
 
 
 async def initialize_web_socket_client(fcm_service: FCM, old_ws_client: WebSocketClient | None = None):
@@ -283,6 +285,7 @@ async def main():
         logger.info("Grid connect watch working on mode: %s",
                     config["WORKING_MODE"])
         fcm_service = FCM(logger, config)
+        trigger_engine.set_fcm_service(fcm_service)
         run_web_view = config["RUN_WEB_VIEWER"] == "True"
         if config["WORKING_MODE"] == DONGLE_MODE:
             if run_web_view:
@@ -388,10 +391,14 @@ async def main():
                 logger.info("Waiting for next dongle data (timeout: %s seconds)", timeout_duration)
         else:
             http = http_handler.Http(logger, config)
+            db_connection = sqlite3.connect(
+                config["DB_NAME"]) if "DB_NAME" in config else None
             while True:
                 try:
                     inverter_data = http.get_run_time_data()
-                    handle_grid_status(inverter_data, fcm_service, None)
+                    handle_grid_status(inverter_data, fcm_service, db_connection)
+                    if db_connection:
+                        trigger_engine.evaluate_triggers(inverter_data, db_connection)
                 except Exception as e:
                     logger.exception("Got error when get http input %s", e)
                 logger.info("Waiting for %s seconds before next check", config["SLEEP_TIME"])

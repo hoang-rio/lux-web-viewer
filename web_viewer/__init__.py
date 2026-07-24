@@ -15,6 +15,8 @@ from base64 import b64decode
 from html import escape
 
 from api_storage import read_grid_state, register_device_token
+import tuya_manager
+import trigger_engine
 
 # Load config from .env and environment
 config: dict = {**dotenv_values(".env"), **environ}
@@ -237,7 +239,7 @@ async def register_fcm(request: web.Request):
                 token = str(payload.get("token", ""))
 
         result = register_device_token(
-            config.get("DEVICE_IDS_JSON_FILE", "devices.json"),
+            config.get("DEVICE_IDS_JSON_FILE", "fcm_devices.json"),
             token,
         )
         status = 200 if result["is_success"] else 400
@@ -428,6 +430,181 @@ async def options_settings(_: web.Request):
     return web.Response()
 
 
+# --- Tuya Device Routes ---
+
+async def get_tuya_devices(_: web.Request):
+    try:
+        conn = get_db_connection()
+        devices = tuya_manager.get_all_devices(conn)
+        return web.json_response({"devices": devices})
+    except Exception as e:
+        logger.error("Error in get_tuya_devices: %s", e)
+        return web.json_response({"devices": []})
+
+
+async def scan_tuya_devices(_: web.Request):
+    try:
+        devices = await tuya_manager.scan_devices()
+        return web.json_response({"devices": devices})
+    except Exception as e:
+        logger.error("Error in scan_tuya_devices: %s", e)
+        return web.json_response({"devices": []})
+
+
+async def tuya_wizard_status(_: web.Request):
+    return web.json_response({"wizard_run": tuya_manager.is_wizard_run()})
+
+
+async def add_tuya_device(request: web.Request):
+    try:
+        data = await request.json()
+        required = ["id", "name", "ip", "local_key"]
+        for field in required:
+            if not data.get(field):
+                return web.json_response({"success": False, "message": f"Missing field: {field}"}, status=400)
+        conn = get_db_connection()
+        result = tuya_manager.add_device(data, conn)
+        return web.json_response({"success": True, "device": result})
+    except Exception as e:
+        logger.error("Error in add_tuya_device: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
+async def get_device_mappings(_: web.Request):
+    try:
+        mappings = tuya_manager.get_device_mappings()
+        return web.json_response({"mappings": mappings})
+    except Exception as e:
+        logger.error("Error in get_device_mappings: %s", e)
+        return web.json_response({"mappings": {}})
+
+
+async def delete_tuya_device(request: web.Request):
+    try:
+        device_id = request.match_info.get("id")
+        conn = get_db_connection()
+        deleted = tuya_manager.delete_device(device_id, conn)
+        return web.json_response({"success": deleted})
+    except Exception as e:
+        logger.error("Error in delete_tuya_device: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
+async def get_device_status(request: web.Request):
+    try:
+        device_id = request.match_info.get("id")
+        conn = get_db_connection()
+        status = await tuya_manager.get_device_status_from_db(device_id, conn)
+        if status is None:
+            return web.json_response({"error": "Device not found"}, status=404)
+        return web.json_response(status)
+    except Exception as e:
+        logger.error("Error in get_device_status: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def batch_device_status(request: web.Request):
+    try:
+        data = await request.json()
+        ids = data.get("ids") if isinstance(data, dict) else None
+        if not ids or not isinstance(ids, list):
+            return web.json_response({"success": False, "message": "ids list required"}, status=400)
+        conn = get_db_connection()
+        statuses = await tuya_manager.get_devices_status_batch(conn, ids)
+        return web.json_response({"success": True, "statuses": statuses})
+    except Exception as e:
+        logger.error("Error in batch_device_status: %s", e)
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def control_device(request: web.Request):
+    try:
+        device_id = request.match_info.get("id")
+        data = await request.json()
+        action = data.get("action", "")
+        params = data.get("params")
+        conn = get_db_connection()
+        result = await tuya_manager.control_device_from_db(device_id, action, conn, params)
+        return web.json_response(result)
+    except Exception as e:
+        logger.error("Error in control_device: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# --- Trigger Routes ---
+
+async def get_triggers(_: web.Request):
+    try:
+        conn = get_db_connection()
+        triggers = trigger_engine.get_all_triggers(conn)
+        return web.json_response({"triggers": triggers})
+    except Exception as e:
+        logger.error("Error in get_triggers: %s", e)
+        return web.json_response({"triggers": []})
+
+
+async def save_trigger_route(request: web.Request):
+    try:
+        data = await request.json()
+        if not data.get("name"):
+            return web.json_response({"success": False, "message": "Name is required"}, status=400)
+        if not data.get("action_type"):
+            return web.json_response({"success": False, "message": "Action type is required"}, status=400)
+        conn = get_db_connection()
+        result = trigger_engine.save_trigger(data, conn)
+        return web.json_response({"success": True, "trigger": result})
+    except Exception as e:
+        logger.error("Error in save_trigger: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
+async def delete_trigger_route(request: web.Request):
+    try:
+        trigger_id = int(request.match_info.get("id"))
+        conn = get_db_connection()
+        deleted = trigger_engine.delete_trigger(trigger_id, conn)
+        return web.json_response({"success": deleted})
+    except Exception as e:
+        logger.error("Error in delete_trigger: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
+async def test_trigger_route(request: web.Request):
+    try:
+        trigger_id = int(request.match_info.get("id"))
+        conn = get_db_connection()
+        tr = trigger_engine.get_trigger(trigger_id, conn)
+        if not tr:
+            return web.json_response({"success": False, "message": "Trigger not found"}, status=404)
+        from datetime import datetime
+        now = datetime.now()
+        try:
+            inverter_data = json.loads(last_inverter_data)["inverter_data"]
+        except Exception:
+            inverter_data = {}
+        actions = trigger_engine._get_actions(tr)
+        trigger_engine._execute_actions(tr, actions, conn, inverter_data)
+        trigger_engine._update_last_triggered(trigger_id, now, conn)
+        action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
+        import json as _json
+        trigger_engine.add_trigger_history(trigger_id, "success", f"Manual test: {action_desc}", conn, actions_detail=_json.dumps(actions))
+        return web.json_response({"success": True})
+    except Exception as e:
+        logger.error("Error in test_trigger: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
+async def get_trigger_history_route(request: web.Request):
+    try:
+        trigger_id = int(request.match_info.get("id"))
+        conn = get_db_connection()
+        history = trigger_engine.get_trigger_history(trigger_id, conn)
+        return web.json_response({"history": history})
+    except Exception as e:
+        logger.error("Error in get_trigger_history: %s", e)
+        return web.json_response({"history": []})
+
+
 async def has_admin_access(request: web.Request):
     """Return whether the requesting client IP is allowed to access admin features.
 
@@ -502,6 +679,12 @@ async def basic_auth_middleware(request, handler):
     resp = _deny_if_not_allowed_cidr(request, "/settings", allowed_methods=("OPTIONS",), web_only=False)
     if resp:
         return resp
+    resp = _deny_if_not_allowed_cidr(request, "/tuya-devices", allowed_methods=("OPTIONS",), web_only=False)
+    if resp:
+        return resp
+    resp = _deny_if_not_allowed_cidr(request, "/triggers", allowed_methods=("OPTIONS",), web_only=False)
+    if resp:
+        return resp
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Basic "):
@@ -536,6 +719,20 @@ def create_runner():
         web.get("/settings", get_settings),
         web.get("/has-admin-access", has_admin_access),
         web.post("/settings", update_settings),
+        web.get("/tuya-devices", get_tuya_devices),
+        web.get("/tuya-devices/mappings", get_device_mappings),
+        web.post("/tuya-devices/scan", scan_tuya_devices),
+        web.get("/tuya-devices/wizard-status", tuya_wizard_status),
+        web.post("/tuya-devices", add_tuya_device),
+        web.delete("/tuya-devices/{id}", delete_tuya_device),
+        web.post("/tuya-devices/{id}/status", get_device_status),
+        web.post("/tuya-devices/batch-status", batch_device_status),
+        web.post("/tuya-devices/{id}/control", control_device),
+        web.get("/triggers", get_triggers),
+        web.post("/triggers", save_trigger_route),
+        web.delete("/triggers/{id}", delete_trigger_route),
+        web.post("/triggers/{id}/test", test_trigger_route),
+        web.get("/triggers/{id}/history", get_trigger_history_route),
         web.static("/", path.join(path.dirname(__file__), "build"))
     ])
     return web.AppRunner(app, access_log=None)
