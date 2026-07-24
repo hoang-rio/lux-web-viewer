@@ -1,10 +1,12 @@
 import json
 import logging
+import os
 import sqlite3
 from datetime import datetime, time as dtime
 from typing import Optional
 
 import tuya_manager
+from play_audio import PlayAudio
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ def set_fcm_service(fcm):
 
 VALID_FIELDS = {"soc", "p_pv", "p_discharge", "p_charge", "fac", "p_eps", "p_to_grid", "p_to_user", "v_bat"}
 VALID_OPERATORS = {">", "<", ">=", "<=", "==", "!="}
-VALID_ACTION_TYPES = {"tuya_on", "tuya_off", "tuya_toggle", "tuya_set", "notification"}
+VALID_ACTION_TYPES = {"tuya_on", "tuya_off", "tuya_toggle", "tuya_set", "notification", "play_audio"}
 
 
 def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
@@ -228,6 +230,8 @@ def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connect
             tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params)
         elif action_type == "notification":
             _send_notification(trigger, params, db_conn, inverter_data)
+        elif action_type == "play_audio":
+            _play_audio(trigger, params)
         else:
             logger.warning("Trigger '%s': unknown action_type '%s'", trigger["name"], action_type)
     except Exception as e:
@@ -308,6 +312,32 @@ def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.C
         db_conn.commit()
     except Exception:
         pass
+
+
+def _play_audio(trigger: dict, params: dict):
+    """Play audio on Chromecast using the shared PlayAudio class."""
+    audio_url = params.get("audio_url", "")
+    repeat = int(params.get("audio_repeat", 1))
+    wait_duration = int(params.get("audio_wait", 5))
+
+    if not audio_url:
+        logger.warning("Trigger '%s': play_audio has no audio_url", trigger["name"])
+        return
+
+    cast_device_name = os.environ.get("CAST_DEVICE_NAME", "")
+    if not cast_device_name:
+        logger.warning("Trigger '%s': CAST_DEVICE_NAME not configured", trigger["name"])
+        return
+
+    try:
+        player = PlayAudio(
+            audio_url, repeat, wait_duration,
+            {"CAST_DEVICE_NAME": cast_device_name, "AUDIO_BASE_URL": ""},
+            logger,
+        )
+        player.start()
+    except Exception as e:
+        logger.error("Trigger '%s': play_audio error: %s", trigger["name"], e)
 
 
 def _update_last_triggered(trigger_id: int, now: datetime, db_conn: sqlite3.Connection):

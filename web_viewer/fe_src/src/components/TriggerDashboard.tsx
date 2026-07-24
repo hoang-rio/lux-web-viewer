@@ -33,6 +33,7 @@ function getDeviceDpsList(deviceId: string | null | undefined, mappings: Record<
 function getActionTypeOptions(): { value: string; label: string }[] {
   return [
     { value: 'notification', label: 'triggers.actionNotification' },
+    { value: 'play_audio', label: 'triggers.actionPlayAudio' },
     { value: 'tuya_on', label: 'triggers.actionTurnOn' },
     { value: 'tuya_off', label: 'triggers.actionTurnOff' },
     { value: 'tuya_set', label: 'triggers.actionSetValue' },
@@ -549,6 +550,9 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
     if (a.action_type === 'notification') {
       return { typeLabel: t('triggers.actionNotification'), targetLabel: a.params?.notification_title || '' };
     }
+    if (a.action_type === 'play_audio') {
+      return { typeLabel: t('triggers.actionPlayAudio'), targetLabel: a.params?.audio_url || '' };
+    }
     const actionMap: Record<string, string> = {
       tuya_on: t('triggers.actionTurnOn'),
       tuya_off: t('triggers.actionTurnOff'),
@@ -578,6 +582,7 @@ function TriggersTab({ triggers, devices, deviceMappings, onAdd, onEdit, onDelet
       tuya_toggle: t('triggers.actionToggle'),
       tuya_set: t('triggers.actionSetValue'),
       notification: t('triggers.actionNotification'),
+      play_audio: t('triggers.actionPlayAudio'),
     };
     return msg.split(',').map((part) => {
       const trimmed = part.trim();
@@ -1182,6 +1187,39 @@ function TriggerForm({ trigger, devices, deviceMappings, onSave, onCancel }: Tri
                           </div>
                         );
                       })()}
+                    </>
+                  ) : action.action_type === 'play_audio' ? (
+                    <>
+                      <div className="form-group">
+                        <label>{t('triggers.audioUrl')}</label>
+                        <input
+                          type="text"
+                          value={action.params?.audio_url || ''}
+                          onChange={(e) => updateActionParams(i, { audio_url: e.target.value })}
+                          placeholder={t('triggers.audioUrlPlaceholder')}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('triggers.audioRepeat')}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={action.params?.audio_repeat ?? 1}
+                          onChange={(e) => updateActionParams(i, { audio_repeat: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                      {(action.params?.audio_repeat ?? 1) > 1 && (
+                        <div className="form-group">
+                          <label>{t('triggers.audioWait')}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={action.params?.audio_wait ?? 5}
+                            onChange={(e) => updateActionParams(i, { audio_wait: parseInt(e.target.value) || 5 })}
+                          />
+                          <span className="field-hint">{t('triggers.audioWaitHint')}</span>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>

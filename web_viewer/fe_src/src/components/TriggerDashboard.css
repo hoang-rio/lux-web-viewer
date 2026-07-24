@@ -346,6 +346,8 @@
 
 .form-group textarea { resize: vertical; font-family: inherit; }
 
+.field-hint { font-size: 12px; color: #888; margin-left: 8px; }
+
 .form-section {
     margin-bottom: 16px;
     padding: 12px;
@@ -573,6 +575,28 @@
 
 @media screen and (max-width: 768px) {
     .trigger-dashboard { width: 95vw; max-height: 90vh; }
+    .trigger-dashboard-header {
+        flex-wrap: wrap;
+        padding: 12px 12px 8px;
+    }
+    .trigger-dashboard-header h3 {
+        font-size: 14px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .trigger-message {
+        position: static;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        order: 3;
+        margin-top: 4px;
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+    }
     .form-row { flex-direction: column; gap: 0; }
     .condition-row { flex-direction: column; align-items: stretch; }
     .condition-row select,

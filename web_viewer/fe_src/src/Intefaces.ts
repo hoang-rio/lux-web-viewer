@@ -117,6 +117,9 @@ export interface ITriggerAction {
     value?: boolean | number | string;
     notification_title?: string;
     notification_body?: string;
+    audio_url?: string;
+    audio_repeat?: number;
+    audio_wait?: number;
   };
 }
 
@@ -125,6 +128,9 @@ export interface ITriggerActionParams {
   value?: boolean | number | string;
   notification_title?: string;
   notification_body?: string;
+  audio_url?: string;
+  audio_repeat?: number;
+  audio_wait?: number;
 }
 
 export interface ITrigger {

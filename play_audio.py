@@ -21,6 +21,11 @@ class PlayAudio(threading.Thread):
         self.__audio_file = audio_file
         self.__stop_event = threading.Event()
 
+    def _get_audio_url(self) -> str:
+        if self.__audio_file.startswith("http://") or self.__audio_file.startswith("https://"):
+            return self.__audio_file
+        return f"{self.__config.get('AUDIO_BASE_URL', '')}/{self.__audio_file}"
+
     def stop(self):
         self.__stop_event.set()
 
@@ -38,12 +43,12 @@ class PlayAudio(threading.Thread):
                 cast.wait(self.__sleep)
                 self.__logger.debug("Cast status: %s", cast.status)
                 mediaController = cast.media_controller
-                # Save original Chromecast volume
                 original_cast_volume = cast.status.volume_level
                 try:
-                    cast.set_volume(1.0)  # Set to 100%
+                    cast.set_volume(1.0)
                 except Exception as e:
                     self.__logger.warning("Failed to set Chromecast volume: %s", e)
+                audio_url = self._get_audio_url()
                 self.__logger.info(
                     "[%s]: Playing on %s %s times repeat",
                     self.__audio_file,
@@ -57,8 +62,7 @@ class PlayAudio(threading.Thread):
                         cast.disconnect()
                         browser.stop_discovery()
                         break
-                    mediaController.play_media(
-                        f"{self.__config['AUDIO_BASE_URL']}/{self.__audio_file}", "audio/mp3")
+                    mediaController.play_media(audio_url, "audio/mp3")
                     mediaController.block_until_active(self.__sleep)
                     self.__repeat = self.__repeat - 1
                     self.__logger.info(
@@ -69,7 +73,6 @@ class PlayAudio(threading.Thread):
                     time.sleep(self.__sleep)
                 self.__logger.debug("MediaControler status: %s",
                                     mediaController.status)
-                # Restore original Chromecast volume
                 if original_cast_volume is not None:
                     try:
                         cast.set_volume(original_cast_volume)
