@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _fcm_service = None
 _config = {}
+_player: PlayAudio | None = None
 
 
 def set_fcm_service(fcm):
@@ -23,6 +24,11 @@ def set_config(config):
     """Set the shared config instance (called from app.py)."""
     global _config
     _config = config
+
+def set_player(player):
+    """Set the shared config instance (called from app.py)."""
+    global _player
+    _player = player
 
 VALID_FIELDS = {"soc", "p_pv", "p_discharge", "p_charge", "fac", "p_eps", "p_to_grid", "p_to_user", "v_bat"}
 VALID_OPERATORS = {">", "<", ">=", "<=", "==", "!="}
@@ -336,12 +342,15 @@ def _play_audio(trigger: dict, params: dict):
         return
 
     try:
-        player = PlayAudio(
+        global _player
+        if _player is not None:
+            _player.stop()
+        _player = PlayAudio(
             audio_url, repeat, wait_duration,
             {"CAST_DEVICE_NAME": cast_device_name, "AUDIO_BASE_URL": ""},
             logger,
         )
-        player.start()
+        _player.start()
     except Exception as e:
         logger.error("Trigger '%s': play_audio error: %s", trigger["name"], e)
 

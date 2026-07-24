@@ -287,6 +287,8 @@ async def main():
         fcm_service = FCM(logger, config)
         trigger_engine.set_fcm_service(fcm_service)
         trigger_engine.set_config(config)
+        global play_audio_thread
+        trigger_engine.set_player(play_audio_thread)
         run_web_view = config["RUN_WEB_VIEWER"] == "True"
         if config["WORKING_MODE"] == DONGLE_MODE:
             if run_web_view:
