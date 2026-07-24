@@ -286,6 +286,7 @@ async def main():
                     config["WORKING_MODE"])
         fcm_service = FCM(logger, config)
         trigger_engine.set_fcm_service(fcm_service)
+        trigger_engine.set_config(config)
         run_web_view = config["RUN_WEB_VIEWER"] == "True"
         if config["WORKING_MODE"] == DONGLE_MODE:
             if run_web_view:

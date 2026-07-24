@@ -11,12 +11,18 @@ from play_audio import PlayAudio
 logger = logging.getLogger(__name__)
 
 _fcm_service = None
+_config = {}
 
 
 def set_fcm_service(fcm):
     """Set the shared FCM service instance (called from app.py)."""
     global _fcm_service
     _fcm_service = fcm
+
+def set_config(config):
+    """Set the shared config instance (called from app.py)."""
+    global _config
+    _config = config
 
 VALID_FIELDS = {"soc", "p_pv", "p_discharge", "p_charge", "fac", "p_eps", "p_to_grid", "p_to_user", "v_bat"}
 VALID_OPERATORS = {">", "<", ">=", "<=", "==", "!="}
@@ -323,8 +329,8 @@ def _play_audio(trigger: dict, params: dict):
     if not audio_url:
         logger.warning("Trigger '%s': play_audio has no audio_url", trigger["name"])
         return
-
-    cast_device_name = os.environ.get("CAST_DEVICE_NAME", "")
+    global _config
+    cast_device_name = _config.get("CAST_DEVICE_NAME", "")
     if not cast_device_name:
         logger.warning("Trigger '%s': CAST_DEVICE_NAME not configured", trigger["name"])
         return
