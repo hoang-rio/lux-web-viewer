@@ -95,33 +95,9 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
       const actions: ITriggerAction[] = JSON.parse(actionsDetail);
       if (!Array.isArray(actions) || actions.length === 0) return translateHistoryMessage(message);
       return actions.map((a: ITriggerAction) => {
-        if (a.action_type === 'notification') {
-          return `${t('triggers.actionNotification')}: ${a.params?.notification_title || ''}`;
-        }
-        if (a.action_type === 'play_audio') {
-          return `${t('triggers.actionPlayAudio')}: ${a.params?.audio_url || ''}`;
-        }
-        const dev = devices.find((d) => d.id === a.device_id);
-        const devName = dev?.name || a.device_id;
-        const typeMap: Record<string, string> = {
-          tuya_on: t('triggers.actionTurnOn'),
-          tuya_off: t('triggers.actionTurnOff'),
-          tuya_toggle: t('triggers.actionToggle'),
-          tuya_set: t('triggers.actionSetValue'),
-        };
-        const typeLabel = typeMap[a.action_type] || a.action_type;
-        if (a.action_type === 'tuya_set') {
-          const val = a.params?.value ?? '';
-          const mapping = deviceMappings[a.device_id || ''];
-          const dps = mapping?.mapping?.[a.dps_key || ''];
-          const dpsLabel = dps?.code || a.dps_key || '';
-          return `${typeLabel} ${devName}${dpsLabel ? ` [${dpsLabel}]` : ''} = ${val}`;
-        }
-        const mapping = deviceMappings[a.device_id || ''];
-        const dps = mapping?.mapping?.[a.dps_key || ''];
-        const dpsLabel = dps?.code || a.dps_key || '';
-        return `${typeLabel} ${devName}${dpsLabel ? ` [${dpsLabel}]` : ''}`;
-      }).join(', ');
+        const { typeLabel, targetLabel } = resolveActionLabel(a);
+        return targetLabel ? `${typeLabel} → ${targetLabel}` : typeLabel;
+      }).join(' + ');
     } catch {
       return translateHistoryMessage(message);
     }
