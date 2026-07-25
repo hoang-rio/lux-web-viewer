@@ -409,7 +409,9 @@ async def notification_unread_count(_: web.Request):
 async def get_settings(_: web.Request):
     try:
         import settings
-        return web.json_response(settings.settings)
+        resp = dict(settings.settings)
+        resp["CAST_DEVICE_CONFIGURED"] = "true" if settings.config.get("CAST_DEVICE_NAME", "").strip() else "false"
+        return web.json_response(resp)
     except Exception as e:
         logger.error(f"Error in get_settings: {e}")
         return web.json_response({})
