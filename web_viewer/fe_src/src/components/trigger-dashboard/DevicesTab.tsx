@@ -14,7 +14,7 @@ interface DevicesTabProps {
   onAddDevice: () => void;
 }
 
-export default function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatuses, onScan, onRegister, onDelete, onTest, onAddDevice }: DevicesTabProps) {
+export default function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatuses, onScan, onRegister, onDelete, onTest }: DevicesTabProps) {
   const { t } = useTranslation();
   const registeredIds = new Set(devices.map((d) => d.id));
   const filteredScanned = scannedDevices.filter((s) => !registeredIds.has(s.gwId));
