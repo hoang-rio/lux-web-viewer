@@ -598,7 +598,8 @@
         overflow: visible;
     }
     .form-row { flex-direction: column; gap: 0; }
-    .condition-row { flex-direction: column; align-items: stretch; }
+    .condition-row { flex-direction: column; align-items: stretch; position: relative; padding-top: 8px; }
+    .condition-row .remove-btn { position: absolute; top: 0; right: 0; }
     .condition-row select,
     .condition-row .condition-value { width: 100%; max-width: none; }
     .condition-type-select { width: 100%; }
