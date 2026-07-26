@@ -1,0 +1,784 @@
+openapi: 3.1.0
+info:
+  title: Lux Web Viewer API (SaaS)
+  description: Multi-tenant API for Lux solar inverter monitoring web viewer with JWT authentication
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:1337
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication and user management
+  - name: Inverters
+    description: Inverter management
+  - name: State
+    description: Inverter and grid state
+  - name: Charts
+    description: Energy chart data
+  - name: Notifications
+    description: Notification management
+
+paths:
+  /auth/config:
+    get:
+      operationId: getAuthConfig
+      tags: [Auth]
+      summary: Get authentication configuration
+      security: []
+      responses:
+        "200":
+          description: Auth config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  auth_required:
+                    type: boolean
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [Auth]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: Logout user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Specific refresh token to revoke (optional, revokes all if omitted)
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/profile:
+    get:
+      operationId: getProfile
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/send-verify-email:
+    post:
+      operationId: sendVerifyEmail
+      tags: [Auth]
+      summary: Send email verification
+      responses:
+        "200":
+          description: Verification email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/verify-email:
+    get:
+      operationId: verifyEmail
+      tags: [Auth]
+      summary: Verify email address
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to home with verification status
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [Auth]
+      summary: Request password reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Reset email sent (always returns success)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [Auth]
+      summary: Reset password with token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [Auth]
+      summary: Change password (requires current password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "401":
+          description: Invalid current password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /inverters:
+    get:
+      operationId: listInverters
+      tags: [Inverters]
+      summary: List user's inverters
+      responses:
+        "200":
+          description: List of inverters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  inverters:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Inverter"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+    post:
+      operationId: createInverter
+      tags: [Inverters]
+      summary: Create a new inverter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dongle_serial]
+              properties:
+                name:
+                  type: string
+                dongle_serial:
+                  type: string
+                invert_serial:
+                  type: string
+      responses:
+        "200":
+          description: Inverter created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  inverter:
+                    $ref: "#/components/schemas/Inverter"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /inverters/{id}:
+    patch:
+      operationId: updateInverter
+      tags: [Inverters]
+      summary: Update inverter name
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Inverter updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  inverter:
+                    $ref: "#/components/schemas/Inverter"
+        "404":
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+    delete:
+      operationId: deleteInverter
+      tags: [Inverters]
+      summary: Delete an inverter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Inverter deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "404":
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /state:
+    get:
+      operationId: getState
+      tags: [State]
+      summary: Get current inverter state
+      parameters:
+        - name: inverter_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current inverter state data
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /mobile/state:
+    get:
+      operationId: getMobileState
+      tags: [State]
+      summary: Get grid connection state for mobile
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Grid state with history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_connected:
+                    type: boolean
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [ON_GRID, OFF_GRID]
+                        time:
+                          type: string
+
+  /hourly-chart:
+    get:
+      operationId: getHourlyChart
+      tags: [Charts]
+      summary: Get hourly chart data
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Date in YYYY-MM-DD format
+      responses:
+        "200":
+          description: Hourly chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /daily-chart:
+    get:
+      operationId: getDailyChart
+      tags: [Charts]
+      summary: Get daily chart data
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          schema:
+            type: string
+          description: Month in YYYY-MM format
+      responses:
+        "200":
+          description: Daily chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /monthly-chart:
+    get:
+      operationId: getMonthlyChart
+      tags: [Charts]
+      summary: Get monthly chart data
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: year
+          in: query
+          schema:
+            type: integer
+          description: Year
+      responses:
+        "200":
+          description: Monthly chart data with available years
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chart:
+                    type: array
+                    items:
+                      type: array
+                  years:
+                    type: array
+                    items:
+                      type: integer
+
+  /yearly-chart:
+    get:
+      operationId: getYearlyChart
+      tags: [Charts]
+      summary: Get yearly chart data
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Yearly chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /total:
+    get:
+      operationId: getTotal
+      tags: [Charts]
+      summary: Get total energy statistics
+      parameters:
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Total energy stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pv:
+                    type: number
+                  battery_charged:
+                    type: number
+                  battery_discharged:
+                    type: number
+                  grid_import:
+                    type: number
+                  grid_export:
+                    type: number
+                  consumption:
+                    type: number
+
+  /notification-history:
+    get:
+      operationId: getNotificationHistory
+      tags: [Notifications]
+      summary: Get notification history
+      responses:
+        "200":
+          description: Notification history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        title:
+                          type: string
+                        body:
+                          type: string
+                        notified_at:
+                          type: string
+                        read:
+                          type: integer
+                        inverter_id:
+                          type: string
+                          nullable: true
+
+  /notification-mark-read:
+    post:
+      operationId: markNotificationsRead
+      tags: [Notifications]
+      summary: Mark all unread notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /notification-unread-count:
+    get:
+      operationId: getNotificationUnreadCount
+      tags: [Notifications]
+      summary: Get count of unread notifications
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_confirmed:
+          type: boolean
+
+    Inverter:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        dongle_serial:
+          type: string
+        invert_serial:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_communication_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_online:
+          type: boolean
+
+    AuthSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    AuthErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
