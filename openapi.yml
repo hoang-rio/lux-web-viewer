@@ -1,0 +1,902 @@
+openapi: 3.1.0
+info:
+  title: Lux Web Viewer API
+  description: API for Lux solar inverter monitoring web viewer
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:1337
+    description: Local development server
+
+tags:
+  - name: State
+    description: Inverter and grid state
+  - name: Charts
+    description: Energy chart data
+  - name: Notifications
+    description: Notification management
+  - name: Settings
+    description: Application settings
+  - name: FCM
+    description: Firebase Cloud Messaging device registration
+  - name: Tuya Devices
+    description: Tuya smart device management
+  - name: Triggers
+    description: Automation trigger management
+  - name: Admin
+    description: Admin access control
+
+paths:
+  /state:
+    get:
+      operationId: getState
+      tags: [State]
+      summary: Get current inverter state
+      responses:
+        "200":
+          description: Current inverter state data
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /mobile/state:
+    get:
+      operationId: getMobileState
+      tags: [State]
+      summary: Get grid connection state for mobile
+      responses:
+        "200":
+          description: Grid state with history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_connected:
+                    type: boolean
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [ON_GRID, OFF_GRID]
+                        time:
+                          type: string
+
+  /hourly-chart:
+    get:
+      operationId: getHourlyChart
+      tags: [Charts]
+      summary: Get hourly chart data
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Date in YYYY-MM-DD format
+      responses:
+        "200":
+          description: Hourly chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /daily-chart:
+    get:
+      operationId: getDailyChart
+      tags: [Charts]
+      summary: Get daily chart data
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: string
+          description: Month in YYYY-MM format
+      responses:
+        "200":
+          description: Daily chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /monthly-chart:
+    get:
+      operationId: getMonthlyChart
+      tags: [Charts]
+      summary: Get monthly chart data
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+          description: Year
+      responses:
+        "200":
+          description: Monthly chart data with available years
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chart:
+                    type: array
+                    items:
+                      type: array
+                  years:
+                    type: array
+                    items:
+                      type: integer
+
+  /yearly-chart:
+    get:
+      operationId: getYearlyChart
+      tags: [Charts]
+      summary: Get yearly chart data
+      responses:
+        "200":
+          description: Yearly chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+
+  /total:
+    get:
+      operationId: getTotal
+      tags: [Charts]
+      summary: Get total energy statistics
+      responses:
+        "200":
+          description: Total energy stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pv:
+                    type: number
+                  battery_charged:
+                    type: number
+                  battery_discharged:
+                    type: number
+                  grid_import:
+                    type: number
+                  grid_export:
+                    type: number
+                  consumption:
+                    type: number
+
+  /notification-history:
+    get:
+      operationId: getNotificationHistory
+      tags: [Notifications]
+      summary: Get notification history
+      responses:
+        "200":
+          description: Notification history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        title:
+                          type: string
+                        body:
+                          type: string
+                        notified_at:
+                          type: string
+                        read:
+                          type: integer
+
+  /notification-mark-read:
+    post:
+      operationId: markNotificationsRead
+      tags: [Notifications]
+      summary: Mark all unread notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /notification-unread-count:
+    get:
+      operationId: getNotificationUnreadCount
+      tags: [Notifications]
+      summary: Get count of unread notifications
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [Settings]
+      summary: Get application settings
+      responses:
+        "200":
+          description: Settings key-value pairs
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      operationId: updateSettings
+      tags: [Settings]
+      summary: Update application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /has-admin-access:
+    get:
+      operationId: hasAdminAccess
+      tags: [Admin]
+      summary: Check if client has admin access
+      responses:
+        "200":
+          description: Admin access check
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  has_admin_access:
+                    type: boolean
+
+  /fcm/register:
+    post:
+      operationId: registerFCM
+      tags: [FCM]
+      summary: Register FCM device token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Registration success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceRegisterResponse"
+        "400":
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceRegisterResponse"
+
+  /tuya-devices:
+    get:
+      operationId: getTuyaDevices
+      tags: [Tuya Devices]
+      summary: Get all registered Tuya devices
+      responses:
+        "200":
+          description: List of Tuya devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TuyaDevice"
+    post:
+      operationId: addTuyaDevice
+      tags: [Tuya Devices]
+      summary: Add a new Tuya device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, name, ip, local_key]
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                ip:
+                  type: string
+                local_key:
+                  type: string
+                protocol_version:
+                  type: string
+                  default: "3.3"
+                device_type:
+                  type: string
+                  default: outlet
+      responses:
+        "200":
+          description: Device added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  device:
+                    $ref: "#/components/schemas/TuyaDevice"
+        "400":
+          description: Missing required field
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /tuya-devices/mappings:
+    get:
+      operationId: getDeviceMappings
+      tags: [Tuya Devices]
+      summary: Get DPS mappings for all devices
+      responses:
+        "200":
+          description: Device DPS mappings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mappings:
+                    type: object
+
+  /tuya-devices/scan:
+    post:
+      operationId: scanTuyaDevices
+      tags: [Tuya Devices]
+      summary: Scan local network for Tuya devices
+      responses:
+        "200":
+          description: Scanned devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ip:
+                          type: string
+                        gwId:
+                          type: string
+                        version:
+                          type: string
+                        product_id:
+                          type: string
+                        name:
+                          type: string
+                        local_key:
+                          type: string
+
+  /tuya-devices/wizard-status:
+    get:
+      operationId: getTuyaWizardStatus
+      tags: [Tuya Devices]
+      summary: Check if tinytuya wizard has been run
+      responses:
+        "200":
+          description: Wizard status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wizard_run:
+                    type: boolean
+
+  /tuya-devices/{id}:
+    delete:
+      operationId: deleteTuyaDevice
+      tags: [Tuya Devices]
+      summary: Delete a Tuya device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /tuya-devices/{id}/status:
+    post:
+      operationId: getDeviceStatus
+      tags: [Tuya Devices]
+      summary: Get live status of a Tuya device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device status
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /tuya-devices/batch-status:
+    post:
+      operationId: batchDeviceStatus
+      tags: [Tuya Devices]
+      summary: Get live status of multiple devices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Batch status result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statuses:
+                    type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /tuya-devices/{id}/control:
+    post:
+      operationId: controlDevice
+      tags: [Tuya Devices]
+      summary: Send control command to a Tuya device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [turn_on, turn_off, toggle, set_value]
+                params:
+                  type: object
+                  properties:
+                    dp:
+                      type: string
+                    value:
+                      type: object
+      responses:
+        "200":
+          description: Control result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  action:
+                    type: string
+        "500":
+          description: Control error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /triggers:
+    get:
+      operationId: getTriggers
+      tags: [Triggers]
+      summary: Get all automation triggers
+      responses:
+        "200":
+          description: List of triggers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  triggers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Trigger"
+    post:
+      operationId: saveTrigger
+      tags: [Triggers]
+      summary: Create or update a trigger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, action_type]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+                enabled:
+                  type: boolean
+                  default: true
+                when_start_time:
+                  type: string
+                  description: "HH:MM format"
+                when_end_time:
+                  type: string
+                  description: "HH:MM format"
+                when_days:
+                  type: string
+                  description: "Comma-separated ISO weekday numbers (1=Monday)"
+                conditions:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/TriggerCondition"
+                actions:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/TriggerAction"
+                action_type:
+                  type: string
+                  enum: [tuya_on, tuya_off, tuya_toggle, tuya_set, notification, play_audio]
+                action_device_id:
+                  type: string
+                action_params:
+                  type: object
+                cooldown_seconds:
+                  type: integer
+                  default: 300
+      responses:
+        "200":
+          description: Trigger saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  trigger:
+                    $ref: "#/components/schemas/Trigger"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /triggers/{id}:
+    delete:
+      operationId: deleteTrigger
+      tags: [Triggers]
+      summary: Delete a trigger
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /triggers/{id}/test:
+    post:
+      operationId: testTrigger
+      tags: [Triggers]
+      summary: Manually test a trigger
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Trigger not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /triggers/{id}/history:
+    get:
+      operationId: getTriggerHistory
+      tags: [Triggers]
+      summary: Get trigger execution history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trigger history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        trigger_id:
+                          type: integer
+                        triggered_at:
+                          type: string
+                        status:
+                          type: string
+                        message:
+                          type: string
+                        actions_detail:
+                          type: string
+
+components:
+  schemas:
+    TuyaDevice:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ip:
+          type: string
+        local_key:
+          type: string
+        protocol_version:
+          type: string
+        device_type:
+          type: string
+        created_at:
+          type: string
+
+    DeviceRegisterResponse:
+      type: object
+      properties:
+        is_success:
+          type: boolean
+        message:
+          type: string
+        device_count:
+          type: integer
+
+    Trigger:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        enabled:
+          type: boolean
+        when_start_time:
+          type: string
+          nullable: true
+        when_end_time:
+          type: string
+          nullable: true
+        when_days:
+          type: string
+          nullable: true
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TriggerCondition"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TriggerAction"
+          nullable: true
+        action_type:
+          type: string
+        action_device_id:
+          type: string
+          nullable: true
+        action_params:
+          type: object
+          nullable: true
+        cooldown_seconds:
+          type: integer
+        last_triggered_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+
+    TriggerCondition:
+      type: object
+      properties:
+        condition_type:
+          type: string
+          enum: [inverter, device]
+        field:
+          type: string
+          description: "Inverter field (soc, p_pv, p_discharge, p_charge, fac, p_eps, p_to_grid, p_to_user, v_bat)"
+        op:
+          type: string
+          enum: [">", "<", ">=", "<=", "==", "!="]
+        value:
+          description: Comparison value for inverter conditions
+        device_id:
+          type: string
+          description: Tuya device ID for device conditions
+        dps_key:
+          type: string
+          description: DPS key for device conditions
+        dps_code:
+          type: string
+          description: DPS code for device conditions
+        compare_value:
+          description: Expected value for device conditions
+
+    TriggerAction:
+      type: object
+      properties:
+        action_type:
+          type: string
+          enum: [tuya_on, tuya_off, tuya_toggle, tuya_set, notification, play_audio]
+        device_id:
+          type: string
+        params:
+          type: object
+
+  responses:
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
