@@ -184,6 +184,7 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
             <h4>{t('triggers.conditionsSection')}</h4>
             {conditions.map((cond, i) => (
               <div key={i} className="condition-row">
+                <span className="condition-row-number">#{i + 1}</span>
                 <select
                   value={cond.condition_type || 'inverter'}
                   onChange={(e) => {

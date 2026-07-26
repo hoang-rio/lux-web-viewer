@@ -383,15 +383,18 @@
     margin-bottom: 8px;
     align-items: center;
     padding: 10px;
-    border: 1px solid #e0e0e0;
+    border: 1px dashed #ccc;
     border-radius: 6px;
     background: #fff;
-    border-bottom: 2px dashed #ccc;
     flex-wrap: wrap;
 }
 
 .condition-row:last-of-type {
-    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 0;
+}
+
+.condition-row-number {
+    display: none;
 }
 
 .condition-row select {
@@ -513,16 +516,14 @@
 }
 
 .action-row {
-    border: 1px solid #e0e0e0;
+    border: 1px dashed #ccc;
     border-radius: 6px;
     padding: 10px;
     margin-bottom: 8px;
     background: #fff;
-    border-bottom: 2px dashed #ccc;
 }
 
 .action-row:last-of-type {
-    border-bottom: 1px solid #e0e0e0;
     margin-bottom: 0;
 }
 
@@ -599,8 +600,8 @@
         overflow: visible;
     }
     .form-row { flex-direction: column; gap: 0; }
-    .condition-row { flex-direction: column; align-items: stretch; position: relative; }
-    .condition-row:has(.remove-btn) { padding-top: 28px; }
+    .condition-row { flex-direction: column; align-items: stretch; position: relative; padding-top: 10px; }
+    .condition-row-number { display: block; position: absolute; top: 2px; left: 10px; font-weight: bold; font-size: 12px; color: #666; }
     .condition-row .remove-btn { position: absolute; top: 2px; right: 0; }
     .condition-row select,
     .condition-row .condition-value { width: 100%; max-width: none; }
@@ -687,11 +688,12 @@
     .condition-type-select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-device-select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-dps-select { background: #3a3a3a; border-color: #555; color: #eee; }
-    .condition-row { border-color: #555; background: #333; border-bottom-color: #555; }
+    .condition-row { border-color: #555; background: #333; }
+    .condition-row-number { color: #aaa; }
     .remove-btn:hover { color: #ff4444; }
     .add-condition-btn { border-color: #4da3ff; color: #4da3ff; }
     .add-condition-btn:hover { background: rgba(77, 163, 255, 0.12); }
-    .action-row { border-color: #555; background: #333; border-bottom-color: #555; }
+    .action-row { border-color: #555; background: #333; }
     .action-row-number { color: #aaa; }
     .add-action-btn { border-color: #4da3ff; color: #4da3ff; }
     .add-action-btn:hover { background: rgba(77, 163, 255, 0.12); }
