@@ -382,15 +382,16 @@
     gap: 6px;
     margin-bottom: 8px;
     align-items: center;
-    padding-bottom: 8px;
-    border-bottom: 1px dashed #ddd;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+    border-bottom: 2px dashed #ccc;
     flex-wrap: wrap;
 }
 
 .condition-row:last-of-type {
-    border-bottom: none;
-    padding-bottom: 0;
-    margin-bottom: 0;
+    border-bottom: 1px solid #e0e0e0;
 }
 
 .condition-row select {
@@ -686,7 +687,7 @@
     .condition-type-select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-device-select { background: #3a3a3a; border-color: #555; color: #eee; }
     .condition-dps-select { background: #3a3a3a; border-color: #555; color: #eee; }
-    .condition-row { border-bottom-color: #555; }
+    .condition-row { border-color: #555; background: #333; border-bottom-color: #555; }
     .remove-btn:hover { color: #ff4444; }
     .add-condition-btn { border-color: #4da3ff; color: #4da3ff; }
     .add-condition-btn:hover { background: rgba(77, 163, 255, 0.12); }
