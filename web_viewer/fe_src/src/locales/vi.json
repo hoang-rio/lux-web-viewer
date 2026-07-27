@@ -105,7 +105,8 @@
     "failedFetchNotifications": "Lấy thông báo thất bại",
     "fetchingUnreadCount": "Đang lấy số lượng thông báo chưa đọc...",
     "failedFetchUnreadCount": "Lấy số lượng thông báo chưa đọc thất bại",
-    "delete": "Xóa thông báo"
+    "delete": "Xóa thông báo",
+    "confirmDelete": "Bạn có chắc chắn muốn xóa thông báo này không?"
   },
   "settings": {
     "title": "Cài đặt",

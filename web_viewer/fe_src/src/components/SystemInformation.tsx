@@ -174,6 +174,9 @@ function SystemInformation({
   }, []);
 
   const deleteNotification = useCallback(async (id: number) => {
+    if (!window.confirm(t("notification.confirmDelete"))) {
+      return;
+    }
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/notification/${id}`, {
         method: 'DELETE',
@@ -188,7 +191,7 @@ function SystemInformation({
     } catch (err) {
       logUtil.error('Failed to delete notification', err);
     }
-  }, [notifications]);
+  }, [notifications, t]);
 
   const effectiveSSEConnected = useMemo(() => {
     return isSSEConnected && !isOffline;
