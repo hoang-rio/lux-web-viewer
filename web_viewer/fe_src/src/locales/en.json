@@ -106,7 +106,8 @@
     "fetchingNotifications": "Fetching notifications...",
     "failedFetchNotifications": "Failed to fetch notifications",
     "fetchingUnreadCount": "Fetching unread notification count...",
-    "failedFetchUnreadCount": "Failed to fetch unread notification count"
+    "failedFetchUnreadCount": "Failed to fetch unread notification count",
+    "delete": "Delete notification"
   },
   "settings": {
     "title": "Settings",

@@ -406,6 +406,20 @@ async def notification_unread_count(_: web.Request):
         logger.error(f"Error in notification_unread_count: {e}")
         return web.json_response({"unread_count": 0})
 
+async def delete_notification(request: web.Request):
+    try:
+        notification_id = request.match_info['id']
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM notification_history WHERE id = ?", (notification_id,))
+        conn.commit()
+        if cursor.rowcount == 0:
+            return web.json_response({"error": "Notification not found"}, status=404)
+        return web.json_response({"success": True})
+    except Exception as e:
+        logger.error(f"Error in delete_notification: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
 async def get_settings(_: web.Request):
     try:
         import settings
@@ -718,6 +732,7 @@ def create_runner():
         web.get("/notification-history", notification_history),
         web.post("/notification-mark-read", mark_notifications_read),
         web.get("/notification-unread-count", notification_unread_count),
+        web.delete("/notification/{id}", delete_notification),
         web.get("/settings", get_settings),
         web.get("/has-admin-access", has_admin_access),
         web.post("/settings", update_settings),
