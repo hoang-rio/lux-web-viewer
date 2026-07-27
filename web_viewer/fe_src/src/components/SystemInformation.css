@@ -401,6 +401,29 @@
     font-size: 14px;
 }
 
+.notification-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notification-delete-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #999;
+    padding: 0 4px;
+    line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.2s, color 0.2s;
+}
+
+.notification-delete-btn:hover {
+    opacity: 1;
+    color: #ee3939;
+}
+
 .notification-meta {
     color: #666;
     font-size: 12px;

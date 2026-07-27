@@ -111,7 +111,9 @@
     "fetchingUnreadCount": "Fetching unread notification count...",
     "failedFetchUnreadCount": "Failed to fetch unread notification count",
     "source": "Source",
-    "unknownInverter": "Unknown inverter"
+    "unknownInverter": "Unknown inverter",
+    "delete": "Delete notification",
+    "confirmDelete": "Are you sure you want to delete this notification?"
   },
   "auth": {
     "verifyEmailWarning": "Your email is not verified yet. Verify it to enable password reset via email.",

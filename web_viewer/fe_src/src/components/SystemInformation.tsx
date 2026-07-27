@@ -169,6 +169,27 @@ function SystemInformation({
     setShowNotifications((prev) => !prev);
   }, []);
 
+  const deleteNotification = useCallback(async (id: number) => {
+    if (!window.confirm(t("notification.confirmDelete"))) {
+      return;
+    }
+    try {
+      const res = await apiFetch(`/notification/${id}`, {
+        method: 'DELETE',
+        withAuth: true,
+      });
+      if (res.ok) {
+        const noti = notifications.find(n => n.id === id);
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        if (noti && noti.read === 0) {
+          setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    } catch (err) {
+      logUtil.error('Failed to delete notification', err);
+    }
+  }, [notifications, t]);
+
   const inverterNameById = useMemo(() => {
     return new Map(inverters.map((inv) => [inv.id, inv.name]));
   }, [inverters]);
@@ -369,19 +390,26 @@ function SystemInformation({
                 <div className="notification-no-record">{t("notification.noRecords")}</div>
               ) : (
                 <ul>
-                  {notifications.map((note, idx) => (
-                    <li key={idx} className={note.read === 0 ? "notification-unread" : ""}>
-                      <div>
-                        <strong>{note.title}</strong>
+                  {notifications.map((noti, idx) => (
+                    <li key={idx} className={noti.read === 0 ? "notification-unread" : ""}>
+                      <div className="notification-item-header">
+                        <strong>{noti.title}</strong>
+                        <button
+                          className="notification-delete-btn"
+                          onClick={() => deleteNotification(noti.id)}
+                          title={t("notification.delete")}
+                        >
+                          ×
+                        </button>
                       </div>
-                      {note.inverter_id && (
+                      {noti.inverter_id && (
                         <div className="notification-meta">
-                          {t("notification.source")}: {inverterNameById.get(note.inverter_id) || t("notification.unknownInverter")}
+                          {t("notification.source")}: {inverterNameById.get(noti.inverter_id) || t("notification.unknownInverter")}
                         </div>
                       )}
-                      <div className="notification-body">{note.body}</div>
+                      <div className="notification-body">{noti.body}</div>
                       <div className="notification-date">
-                        {formatDateTime(note.notified_at)}
+                        {formatDateTime(noti.notified_at)}
                       </div>
                     </li>
                   ))}

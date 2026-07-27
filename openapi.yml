@@ -721,6 +721,40 @@ paths:
                   unread_count:
                     type: integer
 
+  /notification/{id}:
+    delete:
+      operationId: deleteNotification
+      tags: [Notifications]
+      summary: Delete a notification by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Notification ID
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
 components:
   securitySchemes:
     BearerAuth:

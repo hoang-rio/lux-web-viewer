@@ -111,7 +111,9 @@
     "fetchingUnreadCount": "Đang lấy số lượng thông báo chưa đọc...",
     "failedFetchUnreadCount": "Lấy số lượng thông báo chưa đọc thất bại",
     "source": "Nguồn",
-    "unknownInverter": "Biến tần không xác định"
+    "unknownInverter": "Biến tần không xác định",
+    "delete": "Xóa thông báo",
+    "confirmDelete": "Bạn có chắc chắn muốn xóa thông báo này không?"
   },
   "auth": {
     "verifyEmailWarning": "Email của bạn chưa được xác thực. Hãy xác thực để bật chức năng đặt lại mật khẩu qua email.",

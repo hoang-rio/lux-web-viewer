@@ -1017,6 +1017,39 @@ async def notification_unread_count(request: web.Request):
         logger.error(f"Error in notification_unread_count: {e}")
         return web.json_response({"unread_count": 0})
 
+async def delete_notification(request: web.Request):
+    if USE_PG:
+        user_id, auth_error = _require_jwt_user_id(request)
+        if auth_error is not None:
+            return auth_error
+        try:
+            notification_id = int(request.match_info['id'])
+            session = next(get_db_session())
+            try:
+                deleted = mt_repo.delete_notification(session, user_id, notification_id)
+                session.commit()
+                if not deleted:
+                    return web.json_response({"error": "Notification not found"}, status=404)
+                return web.json_response({"success": True})
+            finally:
+                session.close()
+        except Exception as e:
+            logger.error(f"Error in delete_notification (multi-tenant): {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    try:
+        notification_id = request.match_info['id']
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM notification_history WHERE id = ?", (notification_id,))
+        conn.commit()
+        if cursor.rowcount == 0:
+            return web.json_response({"error": "Notification not found"}, status=404)
+        return web.json_response({"success": True})
+    except Exception as e:
+        logger.error(f"Error in delete_notification: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
 async def get_settings(request: web.Request):
     if USE_PG:
         user_id, auth_error = _require_jwt_user_id(request)
@@ -1208,6 +1241,7 @@ def create_runner():
         web.get("/notification-history", notification_history),
         web.post("/notification-mark-read", mark_notifications_read),
         web.get("/notification-unread-count", notification_unread_count),
+        web.delete("/notification/{id}", delete_notification),
         web.get("/settings", get_settings),
         web.post("/settings", update_settings),
         *AUTH_ROUTES,

@@ -641,6 +641,20 @@ def mark_notifications_read(session: Session, user_id: uuid.UUID) -> None:
     session.flush()
 
 
+def delete_notification(session: Session, user_id: uuid.UUID, notification_id: int) -> bool:
+    noti = session.execute(
+        select(NotificationHistory).where(
+            NotificationHistory.id == notification_id,
+            NotificationHistory.user_id == user_id,
+        )
+    ).scalars().first()
+    if noti is None:
+        return False
+    session.delete(noti)
+    session.flush()
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Device tokens
 # ---------------------------------------------------------------------------
