@@ -83,21 +83,23 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
       const manualPrefix = 'Manual test: ';
       if (trimmed.startsWith(manualPrefix)) {
         const actionPart = trimmed.slice(manualPrefix.length);
-        return `${t('triggers.testNow')}: ${actionMap[actionPart.trim()] || actionPart.trim()}`;
+        return `${t('triggers.manualTestLabel')} ${actionMap[actionPart.trim()] || actionPart.trim()}`;
       }
       return actionMap[trimmed] || trimmed;
     }).join(', ');
   };
 
   const renderActionsDetail = (actionsDetail: string, message: string): string => {
+    const isManual = message && message.startsWith('Manual test: ');
     if (!actionsDetail) return translateHistoryMessage(message);
     try {
       const actions: ITriggerAction[] = JSON.parse(actionsDetail);
       if (!Array.isArray(actions) || actions.length === 0) return translateHistoryMessage(message);
-      return actions.map((a: ITriggerAction) => {
+      const label = actions.map((a: ITriggerAction) => {
         const { typeLabel, targetLabel } = resolveActionLabel(a);
         return targetLabel ? `${typeLabel} → ${targetLabel}` : typeLabel;
       }).join(' + ');
+      return isManual ? `${t('triggers.manualTestLabel')} ${label}` : label;
     } catch {
       return translateHistoryMessage(message);
     }

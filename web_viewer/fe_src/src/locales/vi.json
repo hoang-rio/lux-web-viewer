@@ -182,6 +182,7 @@
     "delete": "Xóa",
     "edit": "Sửa",
     "testNow": "Test ngay",
+    "manualTestLabel": "Thử nghiệm:",
     "testOn": "BẬT",
     "testOff": "TẮT",
     "scanForDevices": "Quét thiết bị",

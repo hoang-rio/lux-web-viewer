@@ -184,6 +184,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "testNow": "Test Now",
+    "manualTestLabel": "Manual test:",
     "testOn": "ON",
     "testOff": "OFF",
     "scanForDevices": "Scan for Devices",
