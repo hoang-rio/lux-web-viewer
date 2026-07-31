@@ -48,10 +48,26 @@ def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
             if not trigger["enabled"]:
                 continue
             if not _is_in_time_window(trigger, now):
+                logger.debug(
+                    "Trigger '%s' (id=%s) skipped: outside time window (when_days=%s, %s-%s)",
+                    trigger["name"], trigger["id"], trigger.get("when_days"),
+                    trigger.get("when_start_time"), trigger.get("when_end_time"),
+                )
                 continue
-            if not _check_conditions(trigger["conditions"], inverter_data, db_conn, device_status_cache):
+            conditions_ok, conditions_reason = _check_conditions(
+                trigger["conditions"], inverter_data, db_conn, device_status_cache,
+            )
+            if not conditions_ok:
+                logger.debug(
+                    "Trigger '%s' (id=%s) conditions not met: %s",
+                    trigger["name"], trigger["id"], conditions_reason,
+                )
                 continue
             if not _check_cooldown(trigger, now):
+                logger.debug(
+                    "Trigger '%s' (id=%s) skipped: cooldown not elapsed (cooldown_seconds=%s)",
+                    trigger["name"], trigger["id"], trigger.get("cooldown_seconds"),
+                )
                 continue
             actions = _get_actions(trigger)
             action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
@@ -99,40 +115,42 @@ def _is_in_time_window(trigger: dict, now: datetime) -> bool:
     return True
 
 
-def _check_conditions(conditions: list, inverter_data: dict, db_conn: sqlite3.Connection, device_status_cache: dict) -> bool:
-    """All conditions must match (AND logic)."""
+def _check_conditions(conditions: list, inverter_data: dict, db_conn: sqlite3.Connection, device_status_cache: dict) -> tuple[bool, str]:
+    """All conditions must match (AND logic). Returns (matched, reason)."""
     if not conditions:
-        return True
-    for cond in conditions:
+        return True, ""
+    for idx, cond in enumerate(conditions):
         cond_type = cond.get("condition_type", "inverter")
         if cond_type == "device":
-            if not _check_device_condition(cond, db_conn, device_status_cache):
-                return False
+            cond_ok, cond_reason = _check_device_condition(cond, db_conn, device_status_cache)
         else:
-            if not _check_inverter_condition(cond, inverter_data):
-                return False
-    return True
+            cond_ok, cond_reason = _check_inverter_condition(cond, inverter_data)
+        if not cond_ok:
+            return False, f"condition {idx + 1} ({cond_type}): {cond_reason}"
+    return True, ""
 
 
-def _check_inverter_condition(cond: dict, inverter_data: dict) -> bool:
+def _check_inverter_condition(cond: dict, inverter_data: dict) -> tuple[bool, str]:
     field = cond.get("field", "")
     op = cond.get("op", "")
     value = cond.get("value")
     if field not in VALID_FIELDS or op not in VALID_OPERATORS or value is None:
-        return False
+        return False, f"invalid condition (field={field!r}, op={op!r}, value={value!r})"
     actual = inverter_data.get(field)
     if actual is None:
-        return False
-    return _compare(actual, op, value)
+        return False, f"field '{field}' not present in inverter data"
+    if _compare(actual, op, value):
+        return True, ""
+    return False, f"{field} {op} {value} (actual {actual})"
 
 
-def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict) -> bool:
+def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict) -> tuple[bool, str]:
     device_id = cond.get("device_id", "")
     dps_key = cond.get("dps_key", "1")
     op = cond.get("op", "==")
     expected = cond.get("compare_value")
     if not device_id or expected is None:
-        return False
+        return False, f"missing device_id or compare_value (device_id={device_id!r}, compare_value={expected!r})"
 
     if device_id not in cache:
         try:
@@ -145,19 +163,21 @@ def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict
             else:
                 cache[device_id] = tuya_manager._sync_get_status(row[0], row[1], row[2], row[3])
         except Exception as e:
-            logger.error("Failed to get device status for condition: %s", e)
+            logger.warning("Failed to get status for device %s (condition): %s", device_id, e)
             cache[device_id] = {"error": str(e)}
 
     status = cache.get(device_id, {})
     if "error" in status:
-        return False
+        logger.warning("Trigger condition device %s unreachable: %s", device_id, status["error"])
+        return False, f"device {device_id} status error: {status['error']}"
 
     dps_data = status.get("dps", status)
     actual = dps_data.get(str(dps_key))
     if actual is None:
-        return False
-
-    return _compare(actual, op, expected)
+        return False, f"device {device_id} has no dps[{dps_key}] (available: {sorted(dps_data.keys())})"
+    if _compare(actual, op, expected):
+        return True, ""
+    return False, f"device {device_id} dps[{dps_key}] {op} {expected!r} (actual {actual!r})"
 
 
 def _compare(actual, op: str, expected) -> bool:
