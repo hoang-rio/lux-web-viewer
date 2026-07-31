@@ -7,6 +7,7 @@ import './SettingsPopover.css';
 interface SettingsPopoverProps {
   onClose: () => void;
   onOpenTriggers: () => void;
+  allowAdmin: boolean;
 }
 
 interface Settings {
@@ -26,12 +27,13 @@ interface Settings {
   AUTH_BYPASS_CIDR: string;
 }
 
-const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers }, ref) => {
+const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers, allowAdmin }, ref) => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [originalSettings, setOriginalSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [noAccess, setNoAccess] = useState(false);
   const [message, setMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   const [passwordConfirm, setPasswordConfirm] = useState<string>('');
   const [cidrError, setCidrError] = useState<string | null>(null);
@@ -44,6 +46,11 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
   const fetchSettings = async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/settings`);
+      if (!res.ok) {
+        logUtil.error(`Failed to fetch settings: HTTP ${res.status}`);
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       // Set defaults if missing
       const defaults = {
@@ -63,6 +70,7 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
         ,AUTH_BYPASS_CIDR: '127.0.0.1/32,::1/128'
       };
       const merged = { ...defaults, ...data };
+      setNoAccess(false);
       setSettings(merged);
       setOriginalSettings(merged);
       // If auth already enabled in saved settings, pre-fill confirm password
@@ -174,6 +182,26 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
     if (!settings || !originalSettings) return false;
     return Object.keys(settings).some((key) => settings[key as keyof Settings] !== originalSettings[key as keyof Settings]);
   };
+
+  if (noAccess || !allowAdmin) {
+    return (
+      <div className="settings-popover" ref={ref}>
+        <div className="notification-popover-content">
+          <div className="notification-popover-header">
+            <h3>{t("settings.title")}</h3>
+            <button className="close-popover" onClick={onClose}>
+              ×
+            </button>
+          </div>
+          <div className="settings-no-access">
+            <div className="settings-no-access-icon">🔒</div>
+            <p className="settings-no-access-title">{t("settings.noAdminPermission")}</p>
+            <p className="settings-no-access-hint">{t("settings.noAdminPermissionHint")}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

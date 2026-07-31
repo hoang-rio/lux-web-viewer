@@ -147,7 +147,9 @@
     "hours": "hours",
     "watts": "W",
     "percent": "%",
-    "adminAccessCheckFailed": "Admin access check failed"
+    "adminAccessCheckFailed": "Admin access check failed",
+    "noAdminPermission": "No admin access on this server",
+    "noAdminPermissionHint": "The current server does not grant permission to view or change these settings."
   },
   "getStateError": "API get state error",
   "batteryTypeLeadAcid": "Lead-acid battery",
@@ -252,6 +254,8 @@
     "daySun": "Sun",
     "history": "History",
     "noHistory": "No history records",
-    "and": "AND"
+    "and": "AND",
+    "noAddPermission": "No permission to add triggers or devices",
+    "noAddPermissionHint": "The current server does not grant admin access for managing triggers and devices. Connect to a server IP that has admin permissions."
   }
 }

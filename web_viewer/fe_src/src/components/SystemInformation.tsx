@@ -74,23 +74,45 @@ function SystemInformation({
   }, [fetchUnreadCount]);
 
   // Determine whether this client can access admin features (settings)
+  const checkAdminAccess = useCallback(async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/has-admin-access`);
+      const data = await res.json();
+      const allowed = Boolean(data.has_admin_access);
+      setAllowAdmin(allowed);
+      return allowed;
+    } catch (err) {
+      logUtil.error(i18n.t("settings.adminAccessCheckFailed"), err);
+      // If the request fails, be conservative and hide admin features
+      setAllowAdmin(false);
+      return false;
+    }
+  }, [i18n]);
+
   useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/has-admin-access`);
-        const data = await res.json();
-        if (!cancelled) setAllowAdmin(Boolean(data.has_admin_access));
-      } catch (err) {
-        logUtil.error(i18n.t("settings.adminAccessCheckFailed"), err);
-        // If the request fails, be conservative and hide admin features
-        if (!cancelled) setAllowAdmin(false);
+    checkAdminAccess();
+    const interval = setInterval(checkAdminAccess, 30000);
+    const handleFocus = () => {
+      checkAdminAccess();
+    };
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        checkAdminAccess();
       }
     };
-    check();
-    return () => { cancelled = true };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [checkAdminAccess]);
+
+  const handleSettingsClick = useCallback(async () => {
+    await checkAdminAccess();
+    setShowSettings((prev) => !prev);
+  }, [checkAdminAccess]);
 
   // Extracted fetchNotifications function
   const fetchNotifications = useCallback(async () => {
@@ -254,13 +276,12 @@ function SystemInformation({
           <div className="system-title">
             <span className="system-title-text">{t("systemInformation")}{inverterData.serial ? ` (${inverterData.serial})` : ""}</span>
             <span>{inverterData.deviceTime}</span>
-            {allowAdmin && (
-              <div className="settings-button" ref={settingsButtonRef}>
-                <button
-                  onClick={() => setShowSettings((prev) => !prev)}
-                  className={showSettings ? "active" : "inactive"}
-                  title={t("settings.title")}
-                >
+            <div className="settings-button" ref={settingsButtonRef}>
+              <button
+                onClick={handleSettingsClick}
+                className={showSettings ? "active" : "inactive"}
+                title={t("settings.title")}
+              >
                 {/* Gear icon SVG */}
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -279,7 +300,6 @@ function SystemInformation({
                 </svg>
                 </button>
               </div>
-            )}
             <div className="notification-button" ref={notificationButtonRef}>
               <button
                 onClick={handleShowNotifications}
@@ -417,7 +437,7 @@ function SystemInformation({
               </div>
             </div>
           }>
-            <SettingsPopover ref={settingsPopoverRef} onClose={() => setShowSettings(false)} onOpenTriggers={() => { setShowSettings(false); setShowTriggerDashboard(true); }} />
+            <SettingsPopover ref={settingsPopoverRef} allowAdmin={allowAdmin} onClose={() => setShowSettings(false)} onOpenTriggers={() => { setShowSettings(false); setShowTriggerDashboard(true); }} />
           </Suspense>
         )}
         {showTriggerDashboard && (

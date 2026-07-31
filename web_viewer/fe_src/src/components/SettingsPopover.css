@@ -118,6 +118,37 @@
     color: red;
 }
 
+.settings-no-access {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 16px;
+    min-height: 300px;
+    text-align: center;
+    color: #666;
+}
+
+.settings-no-access-icon {
+    font-size: 32px;
+}
+
+.settings-no-access-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: bold;
+    color: #333;
+}
+
+.settings-no-access-hint {
+    margin: 0;
+    font-size: 13px;
+    color: #888;
+    max-width: 260px;
+    line-height: 1.4;
+}
+
 .settings-popover .notification-popover-header {
     position: relative;
 }
@@ -195,6 +226,15 @@
     }
     .settings-message.success.error {
         color: #FF7F7F;
+    }
+    .settings-no-access {
+        color: #bbb;
+    }
+    .settings-no-access-title {
+        color: #eee;
+    }
+    .settings-no-access-hint {
+        color: #aaa;
     }
     .settings-popover .setting-descrtiption {
         color: #bbb;

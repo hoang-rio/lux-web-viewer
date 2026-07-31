@@ -64,6 +64,36 @@
 .trigger-message.success { color: green; }
 .trigger-message.error { color: red; }
 
+.trigger-no-access {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+    color: #666;
+}
+
+.trigger-no-access-icon {
+    font-size: 40px;
+}
+
+.trigger-no-access-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+.trigger-no-access-hint {
+    margin: 0;
+    font-size: 13px;
+    color: #888;
+    max-width: 320px;
+    line-height: 1.4;
+}
+
 .trigger-tabs {
     display: flex;
     border-bottom: 1px solid #ddd;
@@ -621,6 +651,16 @@
     .trigger-tabs button.active { color: #4da3ff; border-bottom-color: #4da3ff; }
     .trigger-tabs button:hover { color: #6db8ff; }
     .no-records { color: #999; }
+
+    .trigger-no-access {
+        color: #bbb;
+    }
+    .trigger-no-access-title {
+        color: #eee;
+    }
+    .trigger-no-access-hint {
+        color: #aaa;
+    }
 
     .device-card { background: #333; border-color: #555; }
     .device-card.discovered { background: #1a3355; border-color: #2a5588; }

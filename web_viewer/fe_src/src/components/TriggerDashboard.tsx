@@ -20,6 +20,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const [triggers, setTriggers] = useState<ITrigger[]>([]);
   const [scannedDevices, setScannedDevices] = useState<IScannedDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [noAccess, setNoAccess] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<ITrigger | null>(null);
   const [showAddDevice, setShowAddDevice] = useState(false);
@@ -34,6 +35,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const fetchWizardStatus = useCallback(async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/wizard-status`);
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       setWizardRun(Boolean(data.wizard_run));
     } catch (err) {
@@ -44,6 +49,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const fetchDevices = useCallback(async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices`);
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       setDevices(data.devices || []);
     } catch (err) {
@@ -54,6 +63,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const fetchTriggers = useCallback(async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers`);
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       setTriggers(data.triggers || []);
     } catch (err) {
@@ -64,6 +77,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const fetchDeviceMappings = useCallback(async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/mappings`);
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       setDeviceMappings(data.mappings || {});
     } catch (err) {
@@ -74,6 +91,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   const fetchCastStatus = useCallback(async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/settings`);
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       setCastConfigured(data.CAST_DEVICE_CONFIGURED === 'true');
     } catch (err) {
@@ -89,6 +110,10 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: devs.map((d) => d.id) }),
       });
+      if (!res.ok) {
+        setNoAccess(true);
+        return;
+      }
       const data = await res.json();
       if (data.success && data.statuses) {
         const statuses: Record<string, boolean> = {};
@@ -129,6 +154,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   }, [activeTab, devices, fetchDeviceStatuses]);
 
   const handleScan = async () => {
+    if (noAccess) return;
     setScanning(true);
     setScannedDevices([]);
     try {
@@ -147,6 +173,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleRegisterDevice = async (scanned: IScannedDevice) => {
+    if (noAccess) return;
     const name = prompt(t('triggers.enterDeviceName'), scanned.name || 'Tuya Device');
     if (!name) return;
     let localKey = scanned.local_key;
@@ -183,6 +210,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleDeleteDevice = async (id: string) => {
+    if (noAccess) return;
     if (!confirm(t('triggers.confirmDeleteDevice'))) return;
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/${id}`, { method: 'DELETE' });
@@ -194,6 +222,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleTestDevice = async (id: string, action: 'turn_on' | 'turn_off') => {
+    if (noAccess) return;
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/${id}/control`, {
         method: 'POST',
@@ -214,6 +243,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleDeleteTrigger = async (id: number) => {
+    if (noAccess) return;
     if (!confirm(t('triggers.confirmDeleteTrigger'))) return;
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers/${id}`, { method: 'DELETE' });
@@ -225,6 +255,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleTestTrigger = async (id: number) => {
+    if (noAccess) return;
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers/${id}/test`, { method: 'POST' });
       const data = await res.json();
@@ -240,6 +271,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleToggleTrigger = async (trigger: ITrigger) => {
+    if (noAccess) return;
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers`, {
         method: 'POST',
@@ -253,6 +285,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
   };
 
   const handleShowHistory = async (triggerId: number) => {
+    if (noAccess) return;
     setHistoryTriggerId(triggerId);
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers/${triggerId}/history`);
@@ -263,6 +296,24 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
       setTriggerHistory([]);
     }
   };
+
+  if (noAccess) {
+    return (
+      <div className="trigger-dashboard-overlay">
+        <div className="trigger-dashboard">
+          <div className="trigger-dashboard-header">
+            <h3>{t('triggers.title')}</h3>
+            <button className="close-popover" onClick={onClose}>×</button>
+          </div>
+          <div className="trigger-no-access">
+            <div className="trigger-no-access-icon">🔒</div>
+            <p className="trigger-no-access-title">{t('triggers.noAddPermission')}</p>
+            <p className="trigger-no-access-hint">{t('triggers.noAddPermissionHint')}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -286,6 +337,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
         deviceMappings={deviceMappings}
         castConfigured={castConfigured}
         onSave={async (data) => {
+          if (noAccess) return;
           try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers`, {
               method: 'POST',
@@ -346,7 +398,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               onRegister={handleRegisterDevice}
               onDelete={handleDeleteDevice}
               onTest={handleTestDevice}
-              onAddDevice={() => setShowAddDevice(!showAddDevice)}
+              onAddDevice={() => { if (noAccess) return; setShowAddDevice(!showAddDevice); }}
             />
           )}
           {activeTab === 'triggers' && (
@@ -354,8 +406,8 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               triggers={triggers}
               devices={devices}
               deviceMappings={deviceMappings}
-              onAdd={() => setEditingTrigger(createEmptyTrigger())}
-              onEdit={(t) => setEditingTrigger(t)}
+              onAdd={() => { if (noAccess) return; setEditingTrigger(createEmptyTrigger()); }}
+              onEdit={(t) => { if (noAccess) return; setEditingTrigger(t); }}
               onDelete={handleDeleteTrigger}
               onTest={handleTestTrigger}
               onToggle={handleToggleTrigger}
