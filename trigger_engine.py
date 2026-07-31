@@ -180,7 +180,29 @@ def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict
     return False, f"device {device_id} dps[{dps_key}] {op} {expected!r} (actual {actual!r})"
 
 
+def _coerce_boolean(value):
+    """Map common boolean representations to bool.
+
+    Tuya devices may report boolean DPS values as bool, int (0/1) or strings
+    ("true"/"false", "on"/"off"). Normalize them so `==`/`!=` conditions match
+    regardless of representation.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        low = value.strip().lower()
+        if low in ("true", "on", "1"):
+            return True
+        if low in ("false", "off", "0"):
+            return False
+    return value
+
+
 def _compare(actual, op: str, expected) -> bool:
+    actual = _coerce_boolean(actual)
+    expected = _coerce_boolean(expected)
     try:
         actual_num = float(actual)
         expected_num = float(expected)
