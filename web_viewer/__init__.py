@@ -599,7 +599,7 @@ async def test_trigger_route(request: web.Request):
         except Exception:
             inverter_data = {}
         actions = trigger_engine._get_actions(tr)
-        trigger_engine._execute_actions(tr, actions, conn, inverter_data)
+        trigger_engine._execute_actions(tr, actions, conn, inverter_data, is_manual=True)
         trigger_engine._update_last_triggered(trigger_id, now, conn)
         action_desc = ", ".join(a.get("action_type", "unknown") for a in actions)
         import json as _json

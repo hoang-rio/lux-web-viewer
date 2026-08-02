@@ -250,13 +250,13 @@ def _get_actions(trigger: dict) -> list[dict]:
     }]
 
 
-def _execute_actions(trigger: dict, actions: list[dict], db_conn: sqlite3.Connection, inverter_data: dict | None = None):
+def _execute_actions(trigger: dict, actions: list[dict], db_conn: sqlite3.Connection, inverter_data: dict | None = None, is_manual: bool = False):
     """Execute all actions for a trigger."""
     for action in actions:
-        _execute_single_action(trigger, action, db_conn, inverter_data)
+        _execute_single_action(trigger, action, db_conn, inverter_data, is_manual=is_manual)
 
 
-def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connection, inverter_data: dict | None = None):
+def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connection, inverter_data: dict | None = None, is_manual: bool = False):
     """Execute a single action. Runs tuya commands synchronously."""
     action_type = action.get("action_type", "")
     device_id = action.get("device_id")
@@ -283,7 +283,7 @@ def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connect
             tuya_action = action_map[action_type]
             tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params)
         elif action_type == "notification":
-            _send_notification(trigger, params, db_conn, inverter_data)
+            _send_notification(trigger, params, db_conn, inverter_data, is_manual=is_manual)
         elif action_type == "play_audio":
             _play_audio(trigger, params)
         else:
@@ -342,7 +342,7 @@ def _resolve_notification_params(text: str, trigger: dict, inverter_data: dict |
     return text
 
 
-def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.Connection, inverter_data: dict | None = None):
+def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.Connection, inverter_data: dict | None = None, is_manual: bool = False):
     """Send an FCM push notification and log to notification_history."""
     if params is None:
         params = {}
@@ -350,6 +350,8 @@ def _send_notification(trigger: dict, params: Optional[dict], db_conn: sqlite3.C
     body = params.get("notification_body", f"Trigger '{trigger.get('name')}' fired.")
     title = _resolve_notification_params(title, trigger, inverter_data, db_conn)
     body = _resolve_notification_params(body, trigger, inverter_data, db_conn)
+    if is_manual:
+        title = f"[Thử nghiệm] {title}"
     if _fcm_service is not None:
         try:
             _fcm_service.send_notification(title, body)
