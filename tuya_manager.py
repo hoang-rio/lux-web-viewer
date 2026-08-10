@@ -56,13 +56,38 @@ def _sync_scan() -> dict:
         return {}
 
 
-async def get_device_status(device_id: str, ip: str, local_key: str, protocol_version: str = "3.3") -> dict:
+def _find_device_ip(device_id: str) -> Optional[str]:
+    """Scan the local network to find a Tuya device's current IP by its ID."""
+    try:
+        result = _sync_scan()
+        for ip_addr, info in result.items():
+            if not isinstance(info, dict):
+                continue
+            gw_id = info.get("gwId", info.get("id", ""))
+            if gw_id == device_id:
+                return ip_addr
+    except Exception as e:
+        logger.error("Failed to find device %s IP: %s", device_id, e)
+    return None
+
+
+def _update_device_ip(db_conn: sqlite3.Connection, device_id: str, new_ip: str):
+    """Persist a device's newly discovered IP back to the database."""
+    try:
+        db_conn.execute("UPDATE tuya_devices SET ip = ? WHERE id = ?", (new_ip, device_id))
+        db_conn.commit()
+        logger.info("Updated device %s IP to %s", device_id, new_ip)
+    except Exception as e:
+        logger.error("Failed to update device %s IP to %s: %s", device_id, new_ip, e)
+
+
+async def get_device_status(device_id: str, ip: str, local_key: str, protocol_version: str = "3.3", db_conn: Optional[sqlite3.Connection] = None) -> dict:
     """Get the current DPS status of a Tuya device."""
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(
             None,
-            lambda: _sync_get_status(device_id, ip, local_key, protocol_version),
+            lambda: _sync_get_status(device_id, ip, local_key, protocol_version, db_conn),
         )
         return result
     except Exception as e:
@@ -70,11 +95,17 @@ async def get_device_status(device_id: str, ip: str, local_key: str, protocol_ve
         return {"error": str(e)}
 
 
-def _sync_get_status(device_id: str, ip: str, local_key: str, protocol_version: str) -> dict:
+def _sync_get_status(device_id: str, ip: str, local_key: str, protocol_version: str, db_conn: Optional[sqlite3.Connection] = None) -> dict:
     d = tinytuya.OutletDevice(device_id, ip, local_key, version=float(protocol_version))
     data = d.status()
     if data and "Err" in data:
-        return {"error": f"Error {data['Err']}: {data.get('Error', 'unknown')}"}
+        result = {"error": f"Error {data['Err']}: {data.get('Error', 'unknown')}"}
+        if db_conn is not None:
+            new_ip = _find_device_ip(device_id)
+            if new_ip and new_ip != ip:
+                _update_device_ip(db_conn, device_id, new_ip)
+                result = _sync_get_status(device_id, new_ip, local_key, protocol_version)
+        return result
     return data
 
 
@@ -85,6 +116,7 @@ async def control_device(
     action: str,
     protocol_version: str = "3.3",
     params: Optional[dict] = None,
+    db_conn: Optional[sqlite3.Connection] = None,
 ) -> dict:
     """Send a control command to a Tuya device.
 
@@ -94,7 +126,7 @@ async def control_device(
     try:
         result = await loop.run_in_executor(
             None,
-            lambda: _sync_control(device_id, ip, local_key, action, protocol_version, params),
+            lambda: _sync_control(device_id, ip, local_key, action, protocol_version, params, db_conn),
         )
         return result
     except Exception as e:
@@ -109,26 +141,38 @@ def _sync_control(
     action: str,
     protocol_version: str,
     params: Optional[dict],
+    db_conn: Optional[sqlite3.Connection] = None,
 ) -> dict:
-    d = tinytuya.OutletDevice(device_id, ip, local_key, version=float(protocol_version))
+    def _try(ip_addr: str):
+        d = tinytuya.OutletDevice(device_id, ip_addr, local_key, version=float(protocol_version))
+        if action == "turn_on":
+            return d.turn_on()
+        elif action == "turn_off":
+            return d.turn_off()
+        elif action == "toggle":
+            data = d.status()
+            if data and "dps" in data:
+                current = data["dps"].get("1", False)
+                return d.set_status(not current)
+            return False
+        elif action == "set_value" and params:
+            dp_id = params.get("dp", "1")
+            value = params.get("value")
+            return d.set_value(str(dp_id), value)
+        return None
 
-    if action == "turn_on":
-        d.turn_on()
-    elif action == "turn_off":
-        d.turn_off()
-    elif action == "toggle":
-        data = d.status()
-        if data and "dps" in data:
-            current = data["dps"].get("1", False)
-            d.set_status(not current)
-    elif action == "set_value" and params:
-        dp_id = params.get("dp", "1")
-        value = params.get("value")
-        d.set_value(str(dp_id), value)
-    else:
+    ok = _try(ip)
+    if ok is None:
         return {"error": f"Unknown action: {action}"}
+    if not ok and db_conn is not None:
+        new_ip = _find_device_ip(device_id)
+        if new_ip and new_ip != ip:
+            _update_device_ip(db_conn, device_id, new_ip)
+            ok = _try(new_ip)
 
-    return {"success": True, "action": action}
+    if ok:
+        return {"success": True, "action": action}
+    return {"error": f"Failed to execute {action} on device {device_id}"}
 
 
 async def get_device_status_from_db(device_id: str, db_conn: sqlite3.Connection) -> Optional[dict]:
@@ -139,7 +183,7 @@ async def get_device_status_from_db(device_id: str, db_conn: sqlite3.Connection)
     ).fetchone()
     if not row:
         return None
-    return await get_device_status(row[0], row[1], row[2], row[3])
+    return await get_device_status(row[0], row[1], row[2], row[3], db_conn)
 
 
 async def control_device_from_db(device_id: str, action: str, db_conn: sqlite3.Connection, params: Optional[dict] = None) -> dict:
@@ -150,7 +194,7 @@ async def control_device_from_db(device_id: str, action: str, db_conn: sqlite3.C
     ).fetchone()
     if not row:
         return {"error": f"Device {device_id} not found"}
-    return await control_device(row[0], row[1], row[2], action, row[3], params)
+    return await control_device(row[0], row[1], row[2], action, row[3], params, db_conn)
 
 
 def add_device(device_cfg: dict, db_conn: sqlite3.Connection) -> dict:
@@ -209,7 +253,7 @@ async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list
     results: dict[str, dict] = {}
 
     def _fetch_one(row):
-        return row[0], _sync_get_status(row[0], row[1], row[2], row[3])
+        return row[0], _sync_get_status(row[0], row[1], row[2], row[3], db_conn)
 
     tasks = [loop.run_in_executor(None, _fetch_one, row) for row in rows]
     done = await asyncio.gather(*tasks, return_exceptions=True)

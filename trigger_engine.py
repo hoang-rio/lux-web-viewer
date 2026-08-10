@@ -161,7 +161,7 @@ def _check_device_condition(cond: dict, db_conn: sqlite3.Connection, cache: dict
             if not row:
                 cache[device_id] = {"error": "not found"}
             else:
-                cache[device_id] = tuya_manager._sync_get_status(row[0], row[1], row[2], row[3])
+                cache[device_id] = tuya_manager._sync_get_status(row[0], row[1], row[2], row[3], db_conn)
         except Exception as e:
             logger.warning("Failed to get status for device %s (condition): %s", device_id, e)
             cache[device_id] = {"error": str(e)}
@@ -281,7 +281,7 @@ def _execute_single_action(trigger: dict, action: dict, db_conn: sqlite3.Connect
                 logger.warning("Trigger '%s': device %s not found", trigger["name"], device_id)
                 return
             tuya_action = action_map[action_type]
-            tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params)
+            tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params, db_conn)
         elif action_type == "notification":
             _send_notification(trigger, params, db_conn, inverter_data, is_manual=is_manual)
         elif action_type == "play_audio":
@@ -323,7 +323,7 @@ def _resolve_notification_params(text: str, trigger: dict, inverter_data: dict |
             if not row:
                 continue
             dev_name = row[1] or device_id
-            status = tuya_manager._sync_get_status(row[0], row[2], row[3], row[4])
+            status = tuya_manager._sync_get_status(row[0], row[2], row[3], row[4], db_conn)
             dps_data = status.get("dps", status)
             for dps_key, dps_val in dps_data.items():
                 if dps_val is None:
