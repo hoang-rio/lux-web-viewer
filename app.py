@@ -714,7 +714,7 @@ def _migrate_sqlite_to_pg_if_needed() -> None:
     except Exception as exc:
         logger.exception("SQLite→PostgreSQL migration failed: %s", exc)
 
-def handle_grid_status(json_data: dict, fcm_service: FCM, inverter_ctx: dict | None = None):
+async def handle_grid_status(json_data: dict, fcm_service: FCM, inverter_ctx: dict | None = None):
     if not has_input1_data(json_data):
         logger.debug(
             "Skip handle_grid_status because payload does not contain ReadInput1 fields (missing fac). Keys: %s",
@@ -905,7 +905,7 @@ async def process_inverter_data(
             return ws_client
         inverter_data["_inverter_id"] = inverter_ctx["id"]
 
-    handle_grid_status(inverter_data, fcm_service, inverter_ctx)
+    await handle_grid_status(inverter_data, fcm_service, inverter_ctx)
     
     sleep_time = _get_sleep_time(inverter_ctx)
 
@@ -1014,7 +1014,7 @@ async def main():
                 if inverter_data is not None and USE_PG:
                     current_sleep_time = _get_sleep_time(_resolve_inverter_context(inverter_data))
                 logger.info("Waiting for %s seconds before next check", current_sleep_time)
-                time.sleep(current_sleep_time)
+                await asyncio.sleep(current_sleep_time)
         elif config["WORKING_MODE"] == SERVER_MODE:
             from dongle_server import DongleServer
             if run_web_view:
@@ -1065,12 +1065,12 @@ async def main():
             http = http_handler.Http(logger, config)
             while True:
                 try:
-                    inverter_data = http.get_run_time_data()
-                    handle_grid_status(inverter_data, fcm_service, None)
+                    inverter_data = await asyncio.to_thread(http.get_run_time_data)
+                    await handle_grid_status(inverter_data, fcm_service, None)
                 except Exception as e:
                     logger.exception("Got error when get http input %s", e)
                 logger.info("Waiting for %s seconds before next check", config["SLEEP_TIME"])
-                time.sleep(int(config["SLEEP_TIME"]))
+                await asyncio.sleep(int(config["SLEEP_TIME"]))
     except Exception as e:
         logger.exception("Got error when run main %s", e)
         try:

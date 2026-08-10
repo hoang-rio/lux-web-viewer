@@ -162,9 +162,11 @@ class FCM():
     def __save_device(self, devices: list[str]):
         save_device_tokens(self.__config["DEVICE_IDS_JSON_FILE"], devices)
 
-    def __post_send_notify(self, devices: list[str], user_id: str | None = None):
+    def __post_send_notify(self, devices: list[str], user_id: str | None = None, threads: list | None = None):
+        """Join FCM threads and prune dead device tokens. Runs on a background thread."""
+        threads = threads if threads is not None else self.__fcm_threads
         valid_devices: list[str] = []
-        for idx, t in enumerate(self.__fcm_threads):
+        for idx, t in enumerate(threads):
             t.join()
             if t.valid_device:
                 valid_devices.append(devices[idx])
@@ -198,6 +200,10 @@ class FCM():
 
         if len(valid_devices) != len(devices):
             self.__save_device(valid_devices)
+
+    def __notify_async(self, devices: list[str], user_id: str | None = None):
+        """Send notifications without blocking the caller: join/save run on a background thread."""
+        Thread(target=self.__post_send_notify, args=(devices, user_id, self.__fcm_threads[:]), daemon=True).start()
 
     def __log_notification(self, title: str, body: str, inverter_ctx: dict | None = None):
         try:
@@ -296,7 +302,7 @@ class FCM():
                     )
                 self.__fcm_threads.append(t)
                 t.start()
-            self.__post_send_notify(devices, user_id)
+            self.__notify_async(devices, user_id)
         self.__log_notification(notify_title, notify_body, inverter_ctx)
 
     def battery_full_notify(self, body="Pin đã sạc đầy 100%. Có thể bật bình nóng lạnh để tối ưu sử dụng.", inverter_ctx: dict | None = None):
@@ -327,7 +333,7 @@ class FCM():
                 )
                 self.__fcm_threads.append(t)
                 t.start()
-            self.__post_send_notify(devices, user_id)
+            self.__notify_async(devices, user_id)
         self.__log_notification(notify_title, notify_body, inverter_ctx)
 
     def offgrid_notify(self, inverter_ctx: dict | None = None):
@@ -358,7 +364,7 @@ class FCM():
                 )
                 self.__fcm_threads.append(t)
                 t.start()
-            self.__post_send_notify(devices, user_id)
+            self.__notify_async(devices, user_id)
         self.__log_notification(notify_title, notify_body, inverter_ctx)
 
     def abnormal_notify(self, body: str = "Tiêu thụ điện bất thường, vui lòng kiểm tra xem vòi nước đã khóa chưa.", inverter_ctx: dict | None = None):
@@ -389,7 +395,7 @@ class FCM():
                 )
                 self.__fcm_threads.append(t)
                 t.start()
-            self.__post_send_notify(devices, user_id)
+            self.__notify_async(devices, user_id)
         self.__log_notification(notify_title, notify_body, inverter_ctx)
 
     def offgrid_warning_notify(self, warning_power: float = 1500, warning_soc: int | None = None, inverter_ctx: dict | None = None):
@@ -423,5 +429,5 @@ class FCM():
                 )
                 self.__fcm_threads.append(t)
                 t.start()
-            self.__post_send_notify(devices, user_id)
+            self.__notify_async(devices, user_id)
         self.__log_notification(notify_title, notify_body, inverter_ctx)
