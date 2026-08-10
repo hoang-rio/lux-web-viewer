@@ -19,6 +19,7 @@ _scan_cache_ts: float = 0.0
 _scan_cache_lock = threading.Lock()
 _SCAN_CACHE_TTL = 60.0  # seconds between automatic network scans
 STATUS_SOCKET_TIMEOUT = 2.0  # per-device socket timeout for status/control calls
+STATUS_CALL_TIMEOUT = 3.0  # hard cap on a single device status call in a batch
 BATCH_STATUS_TIMEOUT = 10.0  # hard cap on the batch-status endpoint response time
 
 
@@ -339,7 +340,17 @@ async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list
         return row[0], _sync_get_status(row[0], row[1], row[2], row[3], None)
 
     async def _fetch_status(row):
-        return await loop.run_in_executor(None, _fetch_one, row)
+        # Bound each device's status call at the asyncio level. tinytuya's
+        # default socket timeout (and its internal retries) can vary by
+        # version, so we can't rely on d.socket_timeout alone to keep an
+        # offline/stale-IP device from stalling the batch.
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch_one, row),
+                timeout=STATUS_CALL_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            return row[0], {"error": "timeout"}
 
     task_by_id = {
         asyncio.ensure_future(_fetch_status(row)): row[0] for row in rows
