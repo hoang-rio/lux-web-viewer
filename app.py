@@ -199,7 +199,7 @@ def has_input1_data(json_data: dict) -> bool:
     """Return True when payload has minimum fields from ReadInput1."""
     return isinstance(json_data, dict) and ("fac" in json_data)
 
-def handle_grid_status(json_data: dict, fcm_service: FCM, db_connection: sqlite3.Connection):
+async def handle_grid_status(json_data: dict, fcm_service: FCM, db_connection: sqlite3.Connection):
     if not has_input1_data(json_data):
         logger.debug(
             "Skip handle_grid_status because payload does not contain ReadInput1 fields (missing fac). Keys: %s",
@@ -265,7 +265,7 @@ ________Status: \"%s\" (%s) at deviceTime: %s with fac: %s Hz and vacr: %s V____
     dectect_off_grid_warning(
         is_grid_connected, json_data["p_pv"], json_data["p_eps"], json_data["soc"], fcm_service)
     detect_battery_full(json_data["soc"], fcm_service, db_connection)
-    trigger_engine.evaluate_triggers(json_data, db_connection)
+    await trigger_engine.evaluate_triggers_async(json_data)
 
 
 async def initialize_web_socket_client(fcm_service: FCM, old_ws_client: WebSocketClient | None = None):
@@ -315,7 +315,7 @@ async def main():
                     except asyncio.TimeoutError:
                         logger.error("Timeout waiting for dongle input for %s seconds", timeout_duration)
                     if inverter_data is not None:
-                        handle_grid_status(inverter_data, fcm_service, db_connection)
+                        await handle_grid_status(inverter_data, fcm_service, db_connection)
                         if run_web_view:
                             hourly_chart_item = database.insert_hourly_chart(db_connection, inverter_data, int(config["SLEEP_TIME"]))
                             try:
@@ -338,7 +338,7 @@ async def main():
                     logger.exception("Got error when get dongle input %s", e)
                 logger.info("Wating for %s second before next check",
                                 config["SLEEP_TIME"])
-                time.sleep(int(config["SLEEP_TIME"]))
+                await asyncio.sleep(int(config["SLEEP_TIME"]))
         elif config["WORKING_MODE"] == SERVER_MODE:
             from dongle_server import DongleServer
             if run_web_view:
@@ -370,7 +370,7 @@ async def main():
                         timeout=timeout_duration
                     )
                     if inverter_data is not None:
-                        handle_grid_status(inverter_data, fcm_service, db_connection)
+                        await handle_grid_status(inverter_data, fcm_service, db_connection)
                         if run_web_view:
                             hourly_chart_item = database.insert_hourly_chart(db_connection, inverter_data, int(config["SLEEP_TIME"]))
                             try:
@@ -398,14 +398,14 @@ async def main():
                 config["DB_NAME"]) if "DB_NAME" in config else None
             while True:
                 try:
-                    inverter_data = http.get_run_time_data()
-                    handle_grid_status(inverter_data, fcm_service, db_connection)
+                    inverter_data = await asyncio.to_thread(http.get_run_time_data)
+                    await handle_grid_status(inverter_data, fcm_service, db_connection)
                     if db_connection:
-                        trigger_engine.evaluate_triggers(inverter_data, db_connection)
+                        await trigger_engine.evaluate_triggers_async(inverter_data)
                 except Exception as e:
                     logger.exception("Got error when get http input %s", e)
                 logger.info("Waiting for %s seconds before next check", config["SLEEP_TIME"])
-                time.sleep(int(config["SLEEP_TIME"]))
+                await asyncio.sleep(int(config["SLEEP_TIME"]))
     except Exception as e:
         logger.exception("Got error when run main %s", e)
         try:

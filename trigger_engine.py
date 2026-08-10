@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import os
 import sqlite3
+import threading
 from datetime import datetime, time as dtime
 from typing import Optional
 
@@ -13,6 +15,7 @@ logger = logging.getLogger(__name__)
 _fcm_service = None
 _config = {}
 _player: PlayAudio | None = None
+_eval_lock = threading.Lock()
 
 
 def set_fcm_service(fcm):
@@ -84,6 +87,42 @@ def evaluate_triggers(inverter_data: dict, db_conn: sqlite3.Connection):
             _update_last_triggered(trigger["id"], now, db_conn)
     except Exception as e:
         logger.error("Error evaluating triggers: %s", e)
+
+
+def _run_evaluation_worker(inverter_data: dict):
+    """Run trigger evaluation in a worker thread with a dedicated DB connection.
+
+    Uses its own connection so the blocking tinytuya/FCM I/O inside
+    evaluate_triggers() never stalls the main event loop, and no sqlite3
+    connection object is shared across threads.
+    """
+    if not _eval_lock.acquire(blocking=False):
+        logger.debug("Trigger evaluation still running, skipping this round")
+        return
+    conn = None
+    try:
+        db_name = _config.get("DB_NAME") if _config else None
+        if not db_name:
+            logger.warning("DB_NAME not configured; skipping trigger evaluation")
+            return
+        conn = sqlite3.connect(db_name, timeout=10)
+        evaluate_triggers(inverter_data, conn)
+    except Exception as e:
+        logger.error("Error evaluating triggers in worker: %s", e)
+    finally:
+        if conn is not None:
+            conn.close()
+        _eval_lock.release()
+
+
+async def evaluate_triggers_async(inverter_data: dict):
+    """Evaluate triggers off the main event loop.
+
+    Device conditions/actions and FCM sends perform blocking network I/O
+    (tinytuya status reads/controls, up to 15s IP-fallback scans), so they
+    run in a thread pool instead of blocking the event loop.
+    """
+    await asyncio.to_thread(_run_evaluation_worker, inverter_data)
 
 
 def _is_in_time_window(trigger: dict, now: datetime) -> bool:
