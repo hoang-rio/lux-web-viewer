@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import sqlite3
+import threading
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -11,6 +13,11 @@ import tinytuya
 logger = logging.getLogger(__name__)
 
 DEVICES_JSON_FILE = "devices.json"
+
+_scan_cache: dict = {}
+_scan_cache_ts: float = 0.0
+_scan_cache_lock = threading.Lock()
+_SCAN_CACHE_TTL = 60.0  # seconds between automatic network scans
 
 
 def is_wizard_run() -> bool:
@@ -44,9 +51,9 @@ async def scan_devices() -> list[dict]:
     return result
 
 
-def _sync_scan() -> dict:
+def _sync_scan(maxretry: int = 15) -> dict:
     try:
-        result = tinytuya.deviceScan(verbose=False, maxretry=15, poll=True)
+        result = tinytuya.deviceScan(verbose=False, maxretry=maxretry, poll=True)
         if not isinstance(result, dict):
             logger.warning("tinytuya.deviceScan returned %s instead of dict", type(result).__name__)
             return {}
@@ -56,10 +63,29 @@ def _sync_scan() -> dict:
         return {}
 
 
-def _find_device_ip(device_id: str) -> Optional[str]:
-    """Scan the local network to find a Tuya device's current IP by its ID."""
+def _sync_scan_cached() -> dict:
+    """Return a network scan result, refreshing at most once per TTL.
+
+    A single scan is shared by all callers (trigger engine, batch status) so a
+    stale/offline device cannot trigger one full broadcast scan per status call.
+    The lock serializes scans: concurrent callers block briefly and reuse the
+    same result instead of each running their own deviceScan().
+    """
+    global _scan_cache, _scan_cache_ts
+    now = time.monotonic()
+    with _scan_cache_lock:
+        if _scan_cache and now - _scan_cache_ts < _SCAN_CACHE_TTL:
+            return _scan_cache
+        result = _sync_scan(maxretry=6)
+        _scan_cache = result
+        _scan_cache_ts = time.monotonic()
+        return result
+
+
+def _find_device_ip(device_id: str, scan_result: Optional[dict] = None) -> Optional[str]:
+    """Find a Tuya device's current IP by matching gwId in a (cached) scan."""
     try:
-        result = _sync_scan()
+        result = scan_result if scan_result is not None else _sync_scan_cached()
         for ip_addr, info in result.items():
             if not isinstance(info, dict):
                 continue
@@ -79,6 +105,45 @@ def _update_device_ip(db_conn: sqlite3.Connection, device_id: str, new_ip: str):
         logger.info("Updated device %s IP to %s", device_id, new_ip)
     except Exception as e:
         logger.error("Failed to update device %s IP to %s: %s", device_id, new_ip, e)
+
+
+def _get_db_path(db_conn: sqlite3.Connection) -> Optional[str]:
+    """Return the SQLite database file path for a connection (for worker threads)."""
+    try:
+        row = db_conn.execute("PRAGMA database_list").fetchone()
+        return row[2] if row else None
+    except Exception:
+        return None
+
+
+def _heal_device_ips_in_background(db_conn: sqlite3.Connection, failed: list[str], row_by_id: dict):
+    """Rediscover IPs for failed devices in a background thread.
+
+    Runs one (cached) network scan and persists any IP changes so the next
+    status poll uses the corrected IP. Never blocks the caller with per-device
+    retries; uses its own DB connection to avoid sharing one across threads.
+    """
+    def _heal():
+        conn = None
+        try:
+            db_path = _get_db_path(db_conn)
+            if db_path:
+                conn = sqlite3.connect(db_path, timeout=10)
+            scan_result = _sync_scan_cached()
+            for dev_id in failed:
+                row = row_by_id.get(dev_id)
+                if row is None:
+                    continue
+                new_ip = _find_device_ip(dev_id, scan_result)
+                if new_ip and new_ip != row[1]:
+                    _update_device_ip(conn if conn is not None else db_conn, dev_id, new_ip)
+        except Exception as e:
+            logger.error("Background IP heal failed: %s", e)
+        finally:
+            if conn is not None:
+                conn.close()
+
+    threading.Thread(target=_heal, daemon=True).start()
 
 
 async def get_device_status(device_id: str, ip: str, local_key: str, protocol_version: str = "3.3", db_conn: Optional[sqlite3.Connection] = None) -> dict:
@@ -250,13 +315,15 @@ async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list
         ),
         device_ids,
     ).fetchall()
+    row_by_id = {row[0]: row for row in rows}
     results: dict[str, dict] = {}
 
     def _fetch_one(row):
-        return row[0], _sync_get_status(row[0], row[1], row[2], row[3], db_conn)
+        return row[0], _sync_get_status(row[0], row[1], row[2], row[3], None)
 
     tasks = [loop.run_in_executor(None, _fetch_one, row) for row in rows]
     done = await asyncio.gather(*tasks, return_exceptions=True)
+    failed: list[str] = []
     for item in done:
         if isinstance(item, Exception):
             continue
@@ -265,8 +332,15 @@ async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list
             results[dev_id] = {"dps": data["dps"]}
         elif isinstance(data, dict) and "error" in data:
             results[dev_id] = {"error": data["error"]}
+            failed.append(dev_id)
         else:
             results[dev_id] = {"dps": {}}
+
+    # Self-heal stale IPs in the background: failures return immediately and a
+    # single (cached) network scan updates the stored IPs so the next poll
+    # succeeds. The request never waits on a scan or per-device retries.
+    if failed:
+        _heal_device_ips_in_background(db_conn, failed, row_by_id)
     return results
 
 
