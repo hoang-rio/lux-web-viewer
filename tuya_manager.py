@@ -18,6 +18,8 @@ _scan_cache: dict = {}
 _scan_cache_ts: float = 0.0
 _scan_cache_lock = threading.Lock()
 _SCAN_CACHE_TTL = 60.0  # seconds between automatic network scans
+STATUS_SOCKET_TIMEOUT = 2.0  # per-device socket timeout for status/control calls
+BATCH_STATUS_TIMEOUT = 10.0  # hard cap on the batch-status endpoint response time
 
 
 def is_wizard_run() -> bool:
@@ -160,8 +162,23 @@ async def get_device_status(device_id: str, ip: str, local_key: str, protocol_ve
         return {"error": str(e)}
 
 
-def _sync_get_status(device_id: str, ip: str, local_key: str, protocol_version: str, db_conn: Optional[sqlite3.Connection] = None) -> dict:
+def _make_device(device_id: str, ip: str, local_key: str, protocol_version: str) -> tinytuya.OutletDevice:
+    """Create a tinytuya device with a bounded socket timeout.
+
+    Without this, status()/control() on an offline or stale-IP device can block
+    for the tinytuya default (several seconds per attempt, plus internal
+    retries), which stalls batch-status for tens of seconds.
+    """
     d = tinytuya.OutletDevice(device_id, ip, local_key, version=float(protocol_version))
+    try:
+        d.socket_timeout = STATUS_SOCKET_TIMEOUT
+    except Exception as e:
+        logger.warning("Could not set socket_timeout on device %s: %s", device_id, e)
+    return d
+
+
+def _sync_get_status(device_id: str, ip: str, local_key: str, protocol_version: str, db_conn: Optional[sqlite3.Connection] = None) -> dict:
+    d = _make_device(device_id, ip, local_key, protocol_version)
     data = d.status()
     if data and "Err" in data:
         result = {"error": f"Error {data['Err']}: {data.get('Error', 'unknown')}"}
@@ -209,7 +226,7 @@ def _sync_control(
     db_conn: Optional[sqlite3.Connection] = None,
 ) -> dict:
     def _try(ip_addr: str):
-        d = tinytuya.OutletDevice(device_id, ip_addr, local_key, version=float(protocol_version))
+        d = _make_device(device_id, ip_addr, local_key, protocol_version)
         if action == "turn_on":
             return d.turn_on()
         elif action == "turn_off":
@@ -321,20 +338,34 @@ async def get_devices_status_batch(db_conn: sqlite3.Connection, device_ids: list
     def _fetch_one(row):
         return row[0], _sync_get_status(row[0], row[1], row[2], row[3], None)
 
-    tasks = [loop.run_in_executor(None, _fetch_one, row) for row in rows]
-    done = await asyncio.gather(*tasks, return_exceptions=True)
+    async def _fetch_status(row):
+        return await loop.run_in_executor(None, _fetch_one, row)
+
+    task_by_id = {
+        asyncio.ensure_future(_fetch_status(row)): row[0] for row in rows
+    }
+    done, pending = await asyncio.wait(task_by_id, timeout=BATCH_STATUS_TIMEOUT)
     failed: list[str] = []
-    for item in done:
-        if isinstance(item, Exception):
-            continue
-        dev_id, data = item
-        if isinstance(data, dict) and "dps" in data:
-            results[dev_id] = {"dps": data["dps"]}
-        elif isinstance(data, dict) and "error" in data:
-            results[dev_id] = {"error": data["error"]}
+    for task in done:
+        dev_id = task_by_id[task]
+        if task.exception() is not None:
+            results[dev_id] = {"error": "status check failed"}
             failed.append(dev_id)
+            continue
+        dev_id_found, data = task.result()
+        if isinstance(data, dict) and "dps" in data:
+            results[dev_id_found] = {"dps": data["dps"]}
+        elif isinstance(data, dict) and "error" in data:
+            results[dev_id_found] = {"error": data["error"]}
+            failed.append(dev_id_found)
         else:
-            results[dev_id] = {"dps": {}}
+            results[dev_id_found] = {"dps": {}}
+
+    # Devices still running when the cap expires are reported as timed out;
+    # their worker threads finish in the background and the results are
+    # discarded. The response is never held past BATCH_STATUS_TIMEOUT.
+    for task in pending:
+        results[task_by_id[task]] = {"error": "timeout"}
 
     # Self-heal stale IPs in the background: failures return immediately and a
     # single (cached) network scan updates the stored IPs so the next poll
