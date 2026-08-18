@@ -506,6 +506,21 @@ async def delete_tuya_device(request: web.Request):
         return web.json_response({"success": False}, status=500)
 
 
+async def update_tuya_device(request: web.Request):
+    try:
+        device_id = request.match_info.get("id")
+        data = await request.json()
+        name = (data.get("name") or "").strip()
+        if not name:
+            return web.json_response({"success": False, "message": "Name is required"}, status=400)
+        conn = get_db_connection()
+        ok = tuya_manager.update_device_name(device_id, name, conn)
+        return web.json_response({"success": ok})
+    except Exception as e:
+        logger.error("Error in update_tuya_device: %s", e)
+        return web.json_response({"success": False}, status=500)
+
+
 async def get_device_status(request: web.Request):
     try:
         device_id = request.match_info.get("id")
@@ -741,6 +756,7 @@ def create_runner():
         web.post("/tuya-devices/scan", scan_tuya_devices),
         web.get("/tuya-devices/wizard-status", tuya_wizard_status),
         web.post("/tuya-devices", add_tuya_device),
+        web.put("/tuya-devices/{id}", update_tuya_device),
         web.delete("/tuya-devices/{id}", delete_tuya_device),
         web.post("/tuya-devices/{id}/status", get_device_status),
         web.post("/tuya-devices/batch-status", batch_device_status),

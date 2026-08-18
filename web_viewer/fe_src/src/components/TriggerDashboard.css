@@ -184,6 +184,17 @@
 .device-name { font-weight: bold; font-size: 14px; }
 .device-detail { font-size: 12px; color: #666; }
 
+.rename-input {
+    padding: 2px 6px;
+    border: 1px solid #007bff;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    width: 100%;
+    max-width: 250px;
+    box-sizing: border-box;
+}
+
 .device-key {
     font-family: monospace;
     color: #28a745;

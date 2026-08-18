@@ -298,6 +298,13 @@ def add_device(device_cfg: dict, db_conn: sqlite3.Connection) -> dict:
     return device_cfg
 
 
+def update_device_name(device_id: str, name: str, db_conn: sqlite3.Connection) -> bool:
+    """Update the display name of a registered Tuya device."""
+    cursor = db_conn.execute("UPDATE tuya_devices SET name = ? WHERE id = ?", (name, device_id))
+    db_conn.commit()
+    return cursor.rowcount > 0
+
+
 def get_all_devices(db_conn: sqlite3.Connection) -> list[dict]:
     """Return all registered Tuya devices."""
     rows = db_conn.execute(

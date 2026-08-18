@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ITuyaDevice, IScannedDevice } from '../../Intefaces';
 
@@ -11,13 +12,33 @@ interface DevicesTabProps {
   onRegister: (d: IScannedDevice) => void;
   onDelete: (id: string) => void;
   onTest: (id: string, action: 'turn_on' | 'turn_off') => void;
+  onRename: (id: string, name: string) => void;
   onAddDevice: () => void;
 }
 
-export default function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatuses, onScan, onRegister, onDelete, onTest }: DevicesTabProps) {
+export default function DevicesTab({ devices, scannedDevices, scanning, wizardRun, deviceStatuses, onScan, onRegister, onDelete, onTest, onRename }: DevicesTabProps) {
   const { t } = useTranslation();
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const registeredIds = new Set(devices.map((d) => d.id));
   const filteredScanned = scannedDevices.filter((s) => !registeredIds.has(s.gwId));
+
+  const startRename = (d: ITuyaDevice) => {
+    setRenamingId(d.id);
+    setRenameValue(d.name);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter') {
+      const trimmed = renameValue.trim();
+      if (trimmed) {
+        onRename(id, trimmed);
+        setRenamingId(null);
+      }
+    } else if (e.key === 'Escape') {
+      setRenamingId(null);
+    }
+  };
 
   return (
     <div className="devices-tab">
@@ -66,20 +87,58 @@ export default function DevicesTab({ devices, scannedDevices, scanning, wizardRu
             return (
               <div key={d.id} className="device-card registered">
                 <div className="device-info">
-                  <span className="device-name">{d.name}</span>
+                  {renamingId === d.id ? (
+                    <input
+                      type="text"
+                      className="rename-input"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => handleRenameKeyDown(e, d.id)}
+                      onBlur={() => setRenamingId(null)}
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="device-name">{d.name}</span>
+                  )}
                   <span className="device-detail">ID: {d.id}</span>
                   <span className="device-detail">IP: {d.ip}</span>
                 </div>
                 <div className="device-actions">
-                  <button
-                    onClick={() => onTest(d.id, isOn ? 'turn_off' : 'turn_on')}
-                    className={`test-btn ${isOn ? 'off' : 'on'}`}
-                  >
-                    {isOn ? t('triggers.testOff') : t('triggers.testOn')}
-                  </button>
-                  <button onClick={() => onDelete(d.id)} className="delete-btn">
-                    {t('triggers.delete')}
-                  </button>
+                  {renamingId === d.id ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          const trimmed = renameValue.trim();
+                          if (trimmed) {
+                            onRename(d.id, trimmed);
+                            setRenamingId(null);
+                          }
+                        }}
+                        className="edit-btn"
+                        disabled={!renameValue.trim()}
+                      >
+                        {t('triggers.save')}
+                      </button>
+                      <button onClick={() => setRenamingId(null)} className="delete-btn">
+                        {t('triggers.cancel')}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startRename(d)} className="edit-btn">
+                        {t('triggers.rename')}
+                      </button>
+                      <button
+                        onClick={() => onTest(d.id, isOn ? 'turn_off' : 'turn_on')}
+                        className={`test-btn ${isOn ? 'off' : 'on'}`}
+                      >
+                        {isOn ? t('triggers.testOff') : t('triggers.testOn')}
+                      </button>
+                      <button onClick={() => onDelete(d.id)} className="delete-btn">
+                        {t('triggers.delete')}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

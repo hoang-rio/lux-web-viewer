@@ -489,6 +489,47 @@ paths:
                     type: boolean
 
   /tuya-devices/{id}:
+    put:
+      operationId: updateTuyaDevice
+      tags: [Tuya Devices]
+      summary: Update a Tuya device (e.g. rename)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Update result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "400":
+          description: Name is required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
     delete:
       operationId: deleteTuyaDevice
       tags: [Tuya Devices]

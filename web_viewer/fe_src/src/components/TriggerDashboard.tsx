@@ -221,6 +221,26 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
     }
   };
 
+  const handleRenameDevice = async (id: string, name: string) => {
+    if (noAccess) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tuya-devices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchDevices();
+      } else {
+        setMessage({ text: data.message || t('triggers.renameFailed'), type: 'error' });
+      }
+    } catch (err) {
+      logUtil.error('Rename failed', err);
+      setMessage({ text: t('triggers.renameFailed'), type: 'error' });
+    }
+  };
+
   const handleTestDevice = async (id: string, action: 'turn_on' | 'turn_off') => {
     if (noAccess) return;
     try {
@@ -398,6 +418,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               onRegister={handleRegisterDevice}
               onDelete={handleDeleteDevice}
               onTest={handleTestDevice}
+              onRename={handleRenameDevice}
               onAddDevice={() => { if (noAccess) return; setShowAddDevice(!showAddDevice); }}
             />
           )}
