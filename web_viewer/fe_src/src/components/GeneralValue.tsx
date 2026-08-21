@@ -8,9 +8,9 @@ interface IProps {
 
 function GeneralValue({ value, unit, className, color }: IProps) {
   return (
-    <div className={`${className || ''} general-value`} style={color ? { color } : undefined}>
+    <div className={`${className || ''} general-value`}>
       <strong>{value}</strong>
-      {unit}
+      <span style={color ? { color } : undefined}>{unit}</span>
     </div>
   );
 }
