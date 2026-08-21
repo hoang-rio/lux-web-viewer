@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Yarn (keep releases, ignore local state/cache)
+.yarn/*
+!.yarn/releases
+!.yarn/patches
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
