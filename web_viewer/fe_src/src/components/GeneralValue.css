@@ -4,6 +4,14 @@
     font-size: 18px;
     color: var(--ui-text);
 }
+.general-value .unit-mwh {
+    color: rgb(173, 81, 13);
+}
+@media (prefers-color-scheme: dark) {
+    .general-value .unit-mwh {
+        color: rgb(237, 155, 94);
+    }
+}
 @media screen and (max-width: 900px) {
     .general-value {
         font-size: 16px;
