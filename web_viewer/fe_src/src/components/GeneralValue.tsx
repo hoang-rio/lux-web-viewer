@@ -3,14 +3,14 @@ interface IProps {
   value: number | string;
   unit: string;
   className?: string;
-  color?: string;
+  unitClassName?: string;
 }
 
-function GeneralValue({ value, unit, className, color }: IProps) {
+function GeneralValue({ value, unit, className, unitClassName }: IProps) {
   return (
     <div className={`${className || ''} general-value`}>
       <strong>{value}</strong>
-      <span style={color ? { color } : undefined}>{unit}</span>
+      <span className={unitClassName}>{unit}</span>
     </div>
   );
 }

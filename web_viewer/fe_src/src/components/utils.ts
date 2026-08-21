@@ -5,12 +5,12 @@ export function fixedIfNeed(num: number, fixedNumber = 1) {
   return num;
 }
 
-export const MWH_COLOR = "rgb(173, 81, 13)";
+export const MWH_UNIT_CLASS = "unit-mwh";
 
 export interface IFormattedTotal {
   value: number | string;
   unit: string;
-  color?: string;
+  unitClassName?: string;
 }
 
 export function formatTotalValue(kwh: number): IFormattedTotal {
@@ -18,7 +18,7 @@ export function formatTotalValue(kwh: number): IFormattedTotal {
     return {
       value: fixedIfNeed(kwh / 1000),
       unit: " MWh",
-      color: MWH_COLOR,
+      unitClassName: MWH_UNIT_CLASS,
     };
   }
   return { value: fixedIfNeed(kwh), unit: " kWh" };
