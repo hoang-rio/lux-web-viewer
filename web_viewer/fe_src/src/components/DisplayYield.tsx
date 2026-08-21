@@ -2,6 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { ITotal } from "../Intefaces";
 import GeneralValue from "./GeneralValue";
+import { formatTotalValue } from "./utils";
 
 interface IProps {
   total?: ITotal;
@@ -17,7 +18,7 @@ function DisplayYield({ total, ePVDay }: IProps) {
         <div className="description">{t('today')}</div>
         {total && (
           <>
-            <GeneralValue value={total?.pv?.toFixed(1) ?? 0} unit=" kWh" />
+            <GeneralValue {...formatTotalValue(total?.pv ?? 0)} />
             <div className="description">{t('total')}</div>
           </>
         )}

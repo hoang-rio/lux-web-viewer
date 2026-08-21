@@ -4,7 +4,7 @@ import GeneralValue from "./GeneralValue";
 import "./Summary.css";
 import DisplayYield from "./DisplayYield";
 import YieldChart from "./YieldChart";
-import { fixedIfNeed } from "./utils";
+import { formatTotalValue } from "./utils";
 import { useTranslation } from 'react-i18next';
 import * as logUtil from "../utils/logUtil";
 
@@ -133,10 +133,9 @@ function Summary({ invertData }: IProps) {
               {total && (
                 <>
                   <GeneralValue
-                    value={fixedIfNeed(
+                    {...formatTotalValue(
                       isShowCharged ? total.battery_charged : total.battery_discharged
                     )}
-                    unit=" kWh"
                   />
                   <div className="description">
                     {t('total')}
@@ -177,10 +176,9 @@ function Summary({ invertData }: IProps) {
                 {total && (
                   <>
                     <GeneralValue
-                      value={fixedIfNeed(
+                      {...formatTotalValue(
                         isShowFeed ? total.grid_export : total.grid_import
                       )}
-                      unit=" kWh"
                     />
                     <div className="description">
                       {t('total')}
@@ -210,7 +208,7 @@ function Summary({ invertData }: IProps) {
               <div className="description">{t('today')}</div>
               {total && (
                 <>
-                  <GeneralValue value={fixedIfNeed(total.consumption)} unit=" kWh" />
+                  <GeneralValue {...formatTotalValue(total.consumption)} />
                   <div className="description">{t('total')}</div>
                 </>
               )}
