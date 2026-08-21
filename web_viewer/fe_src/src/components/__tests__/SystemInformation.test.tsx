@@ -30,6 +30,12 @@ const forbiddenResponse = () => ({
   json: async () => ({ success: false }),
 });
 
+const allowedResponse = () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ has_admin_access: true }),
+});
+
 describe('SystemInformation no admin access', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(forbiddenResponse()));
@@ -40,7 +46,7 @@ describe('SystemInformation no admin access', () => {
     MockSettingsPopover.mockClear();
   });
 
-  it('always renders the gear button and passes allowAdmin down to SettingsPopover', async () => {
+  it('hides the gear button when there is no admin access', async () => {
     render(
       <SystemInformation
         inverterData={{ serial: 'TEST' } as any}
@@ -50,15 +56,36 @@ describe('SystemInformation no admin access', () => {
       />
     );
 
-    const gear = document.querySelector('.settings-button button');
-    expect(gear).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.querySelector('.settings-button')).not.toBeInTheDocument();
+    });
+    expect(MockSettingsPopover).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(gear as Element);
+  it('renders the gear button and passes allowAdmin down to SettingsPopover when admin access is granted', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(allowedResponse()));
+
+    render(
+      <SystemInformation
+        inverterData={{ serial: 'TEST' } as any}
+        isSSEConnected={false}
+        isOffline={false}
+        onReconnect={() => {}}
+      />
+    );
+
+    const gear = await waitFor(() => {
+      const el = document.querySelector('.settings-button button');
+      expect(el).toBeInTheDocument();
+      return el as Element;
+    });
+
+    fireEvent.click(gear);
     expect(await screen.findByTestId('settings-popover-mock')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(MockSettingsPopover).toHaveBeenCalledWith(
-        expect.objectContaining({ allowAdmin: false })
+        expect.objectContaining({ allowAdmin: true })
       );
     });
   });
