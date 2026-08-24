@@ -304,8 +304,17 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
     }
   };
 
+  const handleCloseHistory = () => {
+    setHistoryTriggerId(null);
+    setTriggerHistory([]);
+  };
+
   const handleShowHistory = async (triggerId: number) => {
     if (noAccess) return;
+    if (historyTriggerId === triggerId) {
+      handleCloseHistory();
+      return;
+    }
     setHistoryTriggerId(triggerId);
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/triggers/${triggerId}/history`);
@@ -435,7 +444,7 @@ export default function TriggerDashboard({ onClose }: TriggerDashboardProps) {
               onShowHistory={handleShowHistory}
               historyTriggerId={historyTriggerId}
               triggerHistory={triggerHistory}
-              onCloseHistory={() => { setHistoryTriggerId(null); setTriggerHistory([]); }}
+              onCloseHistory={handleCloseHistory}
             />
           )}
         </div>
