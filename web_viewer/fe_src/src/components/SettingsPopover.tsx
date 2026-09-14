@@ -229,20 +229,45 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
       <div className="notification-popover-content">
         <div className="notification-popover-header">
           <h3>{t("settings.title")}</h3>
-          <button
-            className="triggers-dashboard-btn"
-            onClick={onOpenTriggers}
-            title={t("triggers.title")}
-          >
-            ⚡
-          </button>
-          <button
-            className="triggers-dashboard-btn"
-            onClick={onOpenModbus}
-            title={t("modbus.title")}
-          >
-            ⛭
-          </button>
+          <div className="settings-header-actions">
+            <button
+              className="triggers-dashboard-btn"
+              onClick={onOpenTriggers}
+              title={t("triggers.title")}
+            >
+              ⚡
+            </button>
+            <button
+              className="triggers-dashboard-btn"
+              onClick={onOpenModbus}
+              title={t("modbus.title")}
+            >
+              {/* Cpu icon SVG */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                viewBox="0 0 24 24"
+                className="feather feather-cpu"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                <rect x="9" y="9" width="6" height="6"></rect>
+                <line x1="9" y1="1" x2="9" y2="4"></line>
+                <line x1="15" y1="1" x2="15" y2="4"></line>
+                <line x1="9" y1="20" x2="9" y2="23"></line>
+                <line x1="15" y1="20" x2="15" y2="23"></line>
+                <line x1="20" y1="9" x2="23" y2="9"></line>
+                <line x1="20" y1="14" x2="23" y2="14"></line>
+                <line x1="1" y1="9" x2="4" y2="9"></line>
+                <line x1="1" y1="14" x2="4" y2="14"></line>
+              </svg>
+            </button>
+          </div>
           {message && (
             <div className={`settings-message ${message.type}`}>
               {message.text}
