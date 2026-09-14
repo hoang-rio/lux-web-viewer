@@ -216,8 +216,26 @@ def request_register(frame: bytes) -> int:
 def parse_response(frame, expected_fn: int) -> int:
     """Parse a response frame and return the register value.
 
-    Supports read (0x03/0x04) responses with the value-length byte and
-    write (0x06/0x10) echo responses.
+    Supports read (0x04 input / 0x03 holding) responses with the value-length
+    byte and write (0x06/0x10) echo responses.
+    """
+    register, payload = read_response_values(frame, expected_fn)
+    if expected_fn in (FN_READ_HOLDING, FN_READ_INPUT):
+        if len(payload) < 2:
+            raise ModbusTruncatedFrame("Read payload has no value bytes")
+        return to_int(payload[0:2])
+    if expected_fn in (FN_WRITE_SINGLE, FN_WRITE_MULTI):
+        if len(payload) >= 2:
+            return to_int(payload[0:2])
+        raise ModbusTruncatedFrame("Write echo has no value bytes")
+    raise ModbusError("Unsupported function 0x%02x" % expected_fn)
+
+
+def read_response_values(frame, expected_fn: int) -> tuple:
+    """Parse a response frame and return (register, value payload bytes).
+
+    Reads return the value payload (one or more little-endian register
+    values); writes return an echo of (register, value-or-count).
     """
     if isinstance(frame, bytes):
         frame = list(frame)
@@ -255,17 +273,18 @@ def parse_response(frame, expected_fn: int) -> int:
             if advertised == remaining_after_register - 1:
                 value_len = advertised
         start = 17 if value_len is not None else 16
-        return to_int(subject[start:start + 2])
+        return register, bytes(subject[start:])
 
     if expected_fn == FN_WRITE_SINGLE:
         # Echo of register + written value (no length byte).
         if len(subject) - 16 >= 2:
-            return to_int(subject[16:18])
-        return 0
+            return register, bytes(subject[16:18])
+        return register, b""
 
     if expected_fn == FN_WRITE_MULTI:
         # Echo of register + count of registers written.
-        count = to_int(subject[16:18]) if len(subject) - 16 >= 2 else 0
-        return count
+        if len(subject) - 16 >= 2:
+            return register, bytes(subject[16:18])
+        return register, b""
 
     raise ModbusError("Unsupported function 0x%02x" % expected_fn)

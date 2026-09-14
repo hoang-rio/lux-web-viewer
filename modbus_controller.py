@@ -22,7 +22,7 @@ from typing import Optional
 import socket_client
 import modbus_registers
 import modbus_service
-from modbus_service import FN_READ_HOLDING, FN_WRITE_SINGLE
+from modbus_service import FN_READ_INPUT, FN_WRITE_SINGLE
 
 logger = logging.getLogger(__file__)
 
@@ -136,23 +136,38 @@ class ModbusController:
         )
         return await asyncio.wrap_future(future)
 
-    def read_holding(self, register: int) -> int:
-        """Blocking read of a single holding register (used internally)."""
-        return self._blocking_execute(
-            modbus_service.build_read_holding_request(
-                self._dongle_serial, self._inverter_serial, register, count=1
-            ),
-            FN_READ_HOLDING,
-        )
+    # Input register blocks served by the dongle (see Dongle.read_input):
+    # register base is one of 0/40/80/120 and each block holds 40 registers.
+    _INPUT_BLOCK_COUNT = 40
 
-    async def read_holding_async(self, register: int) -> int:
-        frame = modbus_service.build_read_holding_request(
-            self._dongle_serial, self._inverter_serial, register, count=1
+    @staticmethod
+    def _block_for(register: int) -> tuple:
+        base = (register // ModbusController._INPUT_BLOCK_COUNT) * ModbusController._INPUT_BLOCK_COUNT
+        count = ModbusController._INPUT_BLOCK_COUNT
+        return base, count, register - base
+
+    async def _read_input_block_async(self, base: int, count: int) -> bytes:
+        frame = modbus_service.build_read_input_request(
+            self._dongle_serial, self._inverter_serial, register=base, count=count
         )
-        return await self.execute(frame, FN_READ_HOLDING)
+        _, payload = modbus_service.read_response_values(
+            await self.execute(frame, FN_READ_INPUT), FN_READ_INPUT
+        )
+        return payload
+
+    async def read_input_async(self, register: int) -> int:
+        base, count, offset = self._block_for(register)
+        payload = await self._read_input_block_async(base, count)
+        start = offset * 2
+        if start + 2 > len(payload):
+            raise modbus_service.ModbusTruncatedFrame(
+                "Input block %s:%s too short (%d bytes) for register %s"
+                % (base, count, len(payload), register)
+            )
+        return modbus_service.to_int(payload[start:start + 2])
 
     async def read_items(self, keys) -> dict:
-        """Read multiple catalog items, deduplicating shared registers."""
+        """Read multiple catalog items via the 40-register input blocks."""
         items = []
         seen = set()
         for key in keys:
@@ -162,9 +177,19 @@ class ModbusController:
             seen.add(item["reg"])
             items.append(item)
 
-        raws = {}
+        # Read each needed input block once, then slice raw values per item.
+        blocks = {}
         for item in items:
-            raws[item["reg"]] = await self.read_holding_async(item["reg"])
+            base, count, offset = self._block_for(item["reg"])
+            block = blocks.get(base)
+            if block is None:
+                block = await self._read_input_block_async(base, count)
+                blocks[base] = block
+            start = offset * 2
+            item["_raw"] = (
+                modbus_service.to_int(block[start:start + 2])
+                if start + 2 <= len(block) else None
+            )
 
         result = {}
         for key in keys:
@@ -172,7 +197,7 @@ class ModbusController:
             if item is None:
                 result[key] = None
                 continue
-            raw = raws.get(item["reg"])
+            raw = item.get("_raw")
             if raw is None:
                 result[key] = None
                 continue
@@ -190,7 +215,7 @@ class ModbusController:
         needs_rmw = mask != 0xFFFF
 
         if needs_rmw:
-            current_raw = await self.read_holding_async(item["reg"])
+            current_raw = await self.read_input_async(item["reg"])
             raw = modbus_registers.merge_raw(item, current_raw, raw_part)
         else:
             raw = raw_part
@@ -200,7 +225,7 @@ class ModbusController:
         )
         await self.execute(frame, FN_WRITE_SINGLE)
 
-        fresh_raw = await self.read_holding_async(item["reg"])
+        fresh_raw = await self.read_input_async(item["reg"])
         return modbus_registers.extract_value(item, fresh_raw)
 
 
