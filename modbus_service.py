@@ -234,11 +234,12 @@ def parse_response(frame, expected_fn: int) -> int:
     raise ModbusError("Unsupported function 0x%02x" % expected_fn)
 
 
-def read_response_values(frame, expected_fn: int) -> tuple:
-    """Parse a response frame and return (register, value payload bytes).
+def validated_subject(frame, expected_fn: int) -> list:
+    """Strip envelope, CRC and header bookkeeping, then validate the reply.
 
-    Reads return the value payload (one or more little-endian register
-    values); writes return an echo of (register, value-or-count).
+    Returns the inner frame (list): [len u16][action u8][device_fn u8]
+    [inverter_serial(10)][register u16][payload].  Raises
+    ModbusTruncatedFrame / ModbusExceptionResponse / ModbusWrongFunction.
     """
     if isinstance(frame, bytes):
         frame = list(frame)
@@ -278,6 +279,65 @@ def read_response_values(frame, expected_fn: int) -> tuple:
             "Expected function 0x%02x but got 0x%02x" % (expected_fn, function)
         )
 
+    return subject
+
+
+# Per-block alignment for 40-register input blocks.  read_input1..4 in
+# dongle_handler place the first value of blocks 0/40 at data[15] while
+# blocks 80/120 (battery BMS / generator & EPS) start at data[17].
+# data = subject[2:], so the first value sits at subject[17] (or 19).
+_BLOCK_VALUE_START = {0: 17, 40: 17, 80: 19, 120: 19}
+
+
+def read_block_payload(frame, expected_fn: int, block_base: int) -> bytes:
+    """Parse a read-input block reply aligned to ``block_base``.
+
+    Returns the value bytes so that register (block_base + k) reads as
+    to_int(payload[2k:2k+2]).  Unknown blocks fall back to the value-length
+    heuristic and may be misaligned.
+    """
+    subject = validated_subject(frame, expected_fn)
+
+    known_start = _BLOCK_VALUE_START.get(block_base)
+    if known_start is not None:
+        start = known_start
+        # Sanity: block replies carry 80 value bytes (40 registers).
+        if len(subject) < start + 2:
+            raise ModbusTruncatedFrame(
+                "Input block %s reply too short: %d <= %d inner bytes"
+                % (block_base, len(subject), start)
+            )
+    else:
+        # Unknown block: try the value-length byte heuristic instead.
+        remaining_after_register = len(subject) - 16
+        value_len = None
+        if remaining_after_register >= 1:
+            advertised = subject[16]
+            if advertised == remaining_after_register - 1:
+                value_len = advertised
+        start = 17 if value_len is not None else 16
+        logger.warning(
+            "Input block %s not in known layout, using heuristic start=%s payload=%d bytes",
+            block_base, start, len(subject) - start,
+        )
+
+    payload = bytes(subject[start:])
+    register = to_int(subject[14:16])
+    logger.debug(
+        "Modbus block reply: base=%s echo_reg=%s payload=%d bytes (%s)",
+        block_base, register, len(payload), payload.hex(),
+    )
+    return payload
+
+
+def read_response_values(frame, expected_fn: int) -> tuple:
+    """Parse a response frame and return (register, value payload bytes).
+
+    Reads return the value payload (one or more little-endian register
+    values); writes return an echo of (register, value-or-count).
+    """
+    subject = validated_subject(frame, expected_fn)
+
     register = to_int(subject[14:16])
 
     if expected_fn in (FN_READ_HOLDING, FN_READ_INPUT):
@@ -293,7 +353,7 @@ def read_response_values(frame, expected_fn: int) -> tuple:
         payload = bytes(subject[start:])
         logger.debug(
             "Modbus read reply: fn=0x%02x reg=%s value_len=%s payload=%d bytes (%s)",
-            function, register, value_len, len(payload), payload.hex(),
+            subject[3], register, value_len, len(payload), payload.hex(),
         )
         return register, payload
 

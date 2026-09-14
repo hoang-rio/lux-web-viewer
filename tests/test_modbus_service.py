@@ -179,6 +179,41 @@ class TestParseResponse(unittest.TestCase):
             m.parse_response(bytes(frame), m.FN_READ_HOLDING)
 
 
+class TestReadBlockPayload(unittest.TestCase):
+    def _block_reply(self, base, values):
+        # Real dongle reply: subject[16] carries the value-length byte, then the
+        # 40 register values.  Blocks 0/40 put the first value at subject[17]
+        # (single value_len byte, as read_input1/read_input2 do); blocks 80/120
+        # carry two extra header bytes before values at subject[19]
+        # (as read_input3/read_input4 do).
+        header = bytes([80]) if base < 80 else bytes([80, 0, 0])
+        payload = header + values
+        return build_response(m.FN_READ_INPUT, base, payload)
+
+    def _block_values(self):
+        # 40 little-endian 16-bit registers, register k holds value k.
+        return b"".join(int(k).to_bytes(2, "little") for k in range(40))
+
+    def test_block_40_alignment(self):
+        values = self._block_values()
+        payload = m.read_block_payload(self._block_reply(40, values), m.FN_READ_INPUT, 40)
+        self.assertGreaterEqual(len(payload), 80)
+        for k in range(40):
+            self.assertEqual(m.to_int(payload[2 * k:2 * k + 2]), k)
+
+    def test_block_80_alignment(self):
+        values = self._block_values()
+        payload = m.read_block_payload(self._block_reply(80, values), m.FN_READ_INPUT, 80)
+        self.assertGreaterEqual(len(payload), 80)
+        for k in range(40):
+            self.assertEqual(m.to_int(payload[2 * k:2 * k + 2]), k)
+
+    def test_unknown_block_heuristic(self):
+        values = bytes([2, 0x34, 0x12])
+        payload = m.read_block_payload(self._block_reply(0, values), m.FN_READ_INPUT, 0)
+        self.assertEqual(payload, bytes(values))
+
+
 class TestHelpers(unittest.TestCase):
     def test_request_register(self):
         frame = m.build_read_holding_request("1234567890", "ABCDEFGHIJ", 0x1234)

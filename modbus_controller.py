@@ -22,6 +22,7 @@ from typing import Optional
 import socket_client
 import modbus_registers
 import modbus_service
+from modbus_registers import extract_value
 from modbus_service import FN_READ_INPUT, FN_WRITE_SINGLE
 
 logger = logging.getLogger(__file__)
@@ -174,8 +175,8 @@ class ModbusController:
         frame = modbus_service.build_read_input_request(
             self._dongle_serial, self._inverter_serial, register=base, count=count
         )
-        _, payload = modbus_service.read_response_values(
-            await self.execute_raw(frame, FN_READ_INPUT), FN_READ_INPUT
+        payload = modbus_service.read_block_payload(
+            await self.execute_raw(frame, FN_READ_INPUT), FN_READ_INPUT, base
         )
         logger.debug(
             "Read input block reg=%s count=%s: %d payload bytes",
@@ -197,36 +198,46 @@ class ModbusController:
     async def read_items(self, keys) -> dict:
         """Read multiple catalog items via the 40-register input blocks."""
         items = []
-        seen = set()
+        seen_regs = set()
         for key in keys:
             item = modbus_registers.get_item(key)
             if item is None:
                 logger.warning("Read: unknown register key %r", key)
                 continue
-            if item["reg"] in seen:
+            if item["reg"] in seen_regs:
                 continue
-            seen.add(item["reg"])
+            seen_regs.add(item["reg"])
             items.append(item)
 
-        logger.debug("Read %d register items in %d blocks", len(items), len(set(self._block_for(i["reg"])[0] for i in items)))
+        logger.debug(
+            "Read %d register items in %d blocks",
+            len(items),
+            len(set(self._block_for(i["reg"])[0] for i in items)),
+        )
 
-        # Read each needed input block once, then slice raw values per item.
-        blocks = {}
+        # Read each needed input block once, then build a reg→raw map.
+        # Blocks are keyed by base register (0, 40, 80, 120, ...).
+        blocks: dict[int, bytes] = {}
         for item in items:
             base, count, offset = self._block_for(item["reg"])
-            block = blocks.get(base)
-            if block is None:
-                block = await self._read_input_block_async(base, count)
-                blocks[base] = block
-            start = offset * 2
-            if start + 2 <= len(block):
-                item["_raw"] = modbus_service.to_int(block[start:start + 2])
-            else:
-                item["_raw"] = None
-                logger.warning(
-                    "Register %s out of input block range: offset=%s block_len=%s",
-                    item["reg"], start, len(block),
-                )
+            if base not in blocks:
+                blocks[base] = await self._read_input_block_async(base, count)
+
+        # Build reg→raw from blocks.  payload[2*offset] is the register value.
+        reg_raw: dict[int, int] = {}
+        for base, block in blocks.items():
+            for item in items:
+                ibase, _, ioffset = self._block_for(item["reg"])
+                if ibase != base:
+                    continue
+                start = ioffset * 2
+                if start + 2 <= len(block):
+                    reg_raw[item["reg"]] = modbus_service.to_int(block[start : start + 2])
+                else:
+                    logger.warning(
+                        "Register %s out of block range: offset=%s block_len=%s",
+                        item["reg"], start, len(block),
+                    )
 
         result = {}
         for key in keys:
@@ -234,12 +245,11 @@ class ModbusController:
             if item is None:
                 result[key] = None
                 continue
-            raw = item.get("_raw")
+            raw = reg_raw.get(item["reg"])
             if raw is None:
                 result[key] = None
                 continue
-            result[key] = modbus_registers.extract_value(item, raw)
-        logger.debug("Read items result: %s", result)
+            result[key] = extract_value(item, raw)
         return result
 
     async def write_item(self, item: dict, value, confirm: bool = True) -> object:
