@@ -27,12 +27,14 @@ class DongleServer:
         self.__modbus_pending: list = []
         self.__modbus_wake = asyncio.Event()
 
-    async def request_modbus(self, frame: bytes, expected_fn: int, timeout: float = 6.0) -> int:
+    async def request_modbus(self, frame: bytes, expected_fn: int, timeout: float = 6.0, return_raw: bool = False):
         """Send a Modbus request on the active dongle connection (if any).
 
         The request is interleaved with the polling loop. Only a single Modbus
         exchange is in flight at a time; callers are awaited until the matching
-        reply arrives (or ``timeout`` elapses).
+        reply arrives (or ``timeout`` elapses). Returns the parsed response
+        value unless ``return_raw`` is set, in which case the raw reply frame
+        bytes are returned.
         """
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -46,6 +48,7 @@ class DongleServer:
             "register": register,
             "future": future,
             "sent": False,
+            "return_raw": bool(return_raw),
         }
         self.__modbus_pending.append(entry)
         self.__modbus_wake.set()
@@ -100,8 +103,11 @@ class DongleServer:
             if future.done():
                 return True
             try:
-                value = modbus_service.parse_response(raw_data, base_fn)
-                future.set_result(value)
+                if entry.get("return_raw"):
+                    future.set_result(raw_data)
+                else:
+                    value = modbus_service.parse_response(raw_data, base_fn)
+                    future.set_result(value)
             except Exception as e:
                 future.set_exception(e)
             return True

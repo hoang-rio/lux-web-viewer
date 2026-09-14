@@ -14,8 +14,11 @@ translated-data frame: 0x03 ReadHolding, 0x04 ReadInput, 0x06 WriteSingle,
 0x10 WriteMulti. CRC16-Modbus is computed over data[2:] (action .. payload).
 """
 
+import logging
 import struct
 from typing import Optional
+
+logger = logging.getLogger(__file__)
 
 A1 = 161
 DATA_START = 26
@@ -251,12 +254,26 @@ def read_response_values(frame, expected_fn: int) -> tuple:
     function = subject[3]
     if function & 0x80:
         code = subject[14] if len(subject) > 14 else 0
+        logger.warning(
+            "Modbus exception reply: expected_fn=0x%02x code=0x%02x frame=%.80s",
+            expected_fn, code, bytes(frame).hex(),
+        )
         raise ModbusExceptionResponse(expected_fn, code)
 
     if len(subject) < 16:
         raise ModbusTruncatedFrame("Inner frame too short: %d bytes" % len(subject))
 
     if function != expected_fn:
+        logger.error(
+            "Modbus function mismatch: expected 0x%02x got 0x%02x (register=%s, "
+            "frame_len=%d, inner_len=%d, frame=%.80s)",
+            expected_fn,
+            function,
+            to_int(subject[14:16]) if len(subject) >= 16 else "?",
+            len(frame),
+            len(subject),
+            bytes(frame).hex(),
+        )
         raise ModbusWrongFunction(
             "Expected function 0x%02x but got 0x%02x" % (expected_fn, function)
         )
@@ -273,11 +290,17 @@ def read_response_values(frame, expected_fn: int) -> tuple:
             if advertised == remaining_after_register - 1:
                 value_len = advertised
         start = 17 if value_len is not None else 16
-        return register, bytes(subject[start:])
+        payload = bytes(subject[start:])
+        logger.debug(
+            "Modbus read reply: fn=0x%02x reg=%s value_len=%s payload=%d bytes (%s)",
+            function, register, value_len, len(payload), payload.hex(),
+        )
+        return register, payload
 
     if expected_fn == FN_WRITE_SINGLE:
         # Echo of register + written value (no length byte).
         if len(subject) - 16 >= 2:
+            logger.debug("Modbus write-single echo: reg=%s value=%s", register, bytes(subject[16:18]).hex())
             return register, bytes(subject[16:18])
         return register, b""
 

@@ -91,12 +91,24 @@ class ModbusController:
 
     async def execute(self, frame: bytes, expected_fn: int) -> int:
         """Send a request frame and return the parsed response value."""
-        self._require_available()
-        if self.mode == MODE_SERVER:
-            return await self._server_execute(frame, expected_fn)
-        return await asyncio.to_thread(self._blocking_execute, frame, expected_fn)
+        raw = await self.execute_raw(frame, expected_fn)
+        return modbus_service.parse_response(raw, expected_fn)
 
-    def _blocking_execute(self, frame: bytes, expected_fn: int) -> int:
+    async def execute_raw(self, frame: bytes, expected_fn: int) -> bytes:
+        """Send a request frame and return the raw response bytes."""
+        self._require_available()
+        logger.debug(
+            "Modbus request fn=0x%02x reg=%s frame=%s mode=%s",
+            expected_fn,
+            modbus_service.request_register(frame),
+            bytes(frame).hex(),
+            self.mode,
+        )
+        if self.mode == MODE_SERVER:
+            return await self._server_execute_raw(frame, expected_fn)
+        return await asyncio.to_thread(self._blocking_execute_raw, frame, expected_fn)
+
+    def _blocking_execute_raw(self, frame: bytes, expected_fn: int) -> bytes:
         frame_bytes = bytes(frame)
         with self._lock:
             sock = socket_client.connect(self._dongle_host, self._dongle_port)
@@ -116,7 +128,12 @@ class ModbusController:
                         if len(data) >= expected or expected > 4096:
                             break
             except (TimeoutError, socket.timeout):
-                logger.warning("Modbus %s: timeout waiting for reply", expected_fn)
+                logger.warning(
+                    "Modbus %s reg=%s: timeout waiting for reply (got %d bytes)",
+                    expected_fn,
+                    modbus_service.request_register(frame),
+                    len(data),
+                )
                 data = data or b""
             finally:
                 try:
@@ -125,13 +142,20 @@ class ModbusController:
                     pass
         if not data:
             raise ModbusTimeoutError("No Modbus response from dongle")
-        return modbus_service.parse_response(data, expected_fn)
+        logger.debug(
+            "Modbus reply fn=0x%02x reg=%s len=%d frame=%s",
+            expected_fn,
+            modbus_service.request_register(frame),
+            len(data),
+            data.hex(),
+        )
+        return data
 
-    async def _server_execute(self, frame: bytes, expected_fn: int) -> int:
+    async def _server_execute_raw(self, frame: bytes, expected_fn: int) -> bytes:
         if self._server is None or self._server_loop is None:
             raise ModbusUnavailableError("Server transport not initialized")
         future = asyncio.run_coroutine_threadsafe(
-            self._server.request_modbus(bytes(frame), expected_fn),
+            self._server.request_modbus(bytes(frame), expected_fn, return_raw=True),
             self._server_loop,
         )
         return await asyncio.wrap_future(future)
@@ -151,7 +175,11 @@ class ModbusController:
             self._dongle_serial, self._inverter_serial, register=base, count=count
         )
         _, payload = modbus_service.read_response_values(
-            await self.execute(frame, FN_READ_INPUT), FN_READ_INPUT
+            await self.execute_raw(frame, FN_READ_INPUT), FN_READ_INPUT
+        )
+        logger.debug(
+            "Read input block reg=%s count=%s: %d payload bytes",
+            base, count, len(payload),
         )
         return payload
 
@@ -172,10 +200,15 @@ class ModbusController:
         seen = set()
         for key in keys:
             item = modbus_registers.get_item(key)
-            if item is None or item["reg"] in seen:
+            if item is None:
+                logger.warning("Read: unknown register key %r", key)
+                continue
+            if item["reg"] in seen:
                 continue
             seen.add(item["reg"])
             items.append(item)
+
+        logger.debug("Read %d register items in %d blocks", len(items), len(set(self._block_for(i["reg"])[0] for i in items)))
 
         # Read each needed input block once, then slice raw values per item.
         blocks = {}
@@ -186,10 +219,14 @@ class ModbusController:
                 block = await self._read_input_block_async(base, count)
                 blocks[base] = block
             start = offset * 2
-            item["_raw"] = (
-                modbus_service.to_int(block[start:start + 2])
-                if start + 2 <= len(block) else None
-            )
+            if start + 2 <= len(block):
+                item["_raw"] = modbus_service.to_int(block[start:start + 2])
+            else:
+                item["_raw"] = None
+                logger.warning(
+                    "Register %s out of input block range: offset=%s block_len=%s",
+                    item["reg"], start, len(block),
+                )
 
         result = {}
         for key in keys:
@@ -202,6 +239,7 @@ class ModbusController:
                 result[key] = None
                 continue
             result[key] = modbus_registers.extract_value(item, raw)
+        logger.debug("Read items result: %s", result)
         return result
 
     async def write_item(self, item: dict, value, confirm: bool = True) -> object:
@@ -217,8 +255,17 @@ class ModbusController:
         if needs_rmw:
             current_raw = await self.read_input_async(item["reg"])
             raw = modbus_registers.merge_raw(item, current_raw, raw_part)
+            logger.info(
+                "Modbus write%s key=%s value=%r -> reg=%s raw=0x%04x (rmw from 0x%04x)",
+                " (danger)" if item.get("danger") else "",
+                item["key"], value, item["reg"], raw, current_raw,
+            )
         else:
             raw = raw_part
+            logger.info(
+                "Modbus write key=%s value=%r -> reg=%s raw=0x%04x",
+                item["key"], value, item["reg"], raw,
+            )
 
         frame = modbus_service.build_write_single_request(
             self._dongle_serial, self._inverter_serial, item["reg"], raw
@@ -226,6 +273,11 @@ class ModbusController:
         await self.execute(frame, FN_WRITE_SINGLE)
 
         fresh_raw = await self.read_input_async(item["reg"])
+        logger.debug(
+            "Modbus write verify key=%s reg=%s fresh_raw=0x%04x value=%r",
+            item["key"], item["reg"], fresh_raw,
+            modbus_registers.extract_value(item, fresh_raw),
+        )
         return modbus_registers.extract_value(item, fresh_raw)
 
 
