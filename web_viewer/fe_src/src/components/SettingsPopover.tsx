@@ -7,6 +7,7 @@ import './SettingsPopover.css';
 interface SettingsPopoverProps {
   onClose: () => void;
   onOpenTriggers: () => void;
+  onOpenModbus: () => void;
   allowAdmin: boolean;
 }
 
@@ -27,7 +28,7 @@ interface Settings {
   AUTH_BYPASS_CIDR: string;
 }
 
-const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers, allowAdmin }, ref) => {
+const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onClose, onOpenTriggers, onOpenModbus, allowAdmin }, ref) => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [originalSettings, setOriginalSettings] = useState<Settings | null>(null);
@@ -234,6 +235,13 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
             title={t("triggers.title")}
           >
             ⚡
+          </button>
+          <button
+            className="triggers-dashboard-btn"
+            onClick={onOpenModbus}
+            title={t("modbus.title")}
+          >
+            ⛭
           </button>
           {message && (
             <div className={`settings-message ${message.type}`}>

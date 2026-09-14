@@ -259,5 +259,31 @@
     "and": "VÀ",
     "noAddPermission": "Không có quyền thêm trigger hoặc thiết bị",
     "noAddPermissionHint": "Máy chủ hiện tại không cấp quyền quản trị để quản lý trigger và thiết bị. Hãy kết nối tới IP máy chủ có quyền quản trị."
+  },
+  "modbus": {
+    "title": "Cài đặt Inverter",
+    "advanced": "Cài đặt nâng cao",
+    "advancedHint": "Các cài đặt nguy hiểm đang bị ẩn. Bật để xem và thay đổi.",
+    "available": "Modbus sẵn sàng",
+    "unavailable": "Modbus không sẵn sàng",
+    "mode": "Chế độ",
+    "refresh": "Làm mới",
+    "current": "Hiện tại",
+    "apply": "Áp dụng",
+    "saving": "Đang lưu...",
+    "danger": "Cài đặt nguy hiểm. Thay đổi có thể ảnh hưởng hoạt động hệ thống.",
+    "verifyHint": "Sau khi áp dụng, hãy đọc lại giá trị để xác nhận inverter đã chấp nhận thay đổi.",
+    "valueRequired": "Nhập giá trị trước khi áp dụng",
+    "writeSuccess": "Đã áp dụng",
+    "writeFailed": "Áp dụng thất bại",
+    "loadFailed": "Không tải được các thanh ghi modbus",
+    "unavailableHint": "Modbus không khả dụng ở chế độ máy chủ hiện tại. Không thể đọc hoặc thay đổi thanh ghi inverter.",
+    "noRegisters": "Không có thanh ghi nào",
+    "confirmTitle": "Xác nhận thay đổi nguy hiểm",
+    "confirmDanger": "Đây là cài đặt nguy hiểm. Thay đổi có thể gây hại cho hệ thống hoặc ảnh hưởng hoạt động. Bạn có chắc chắn?",
+    "yes": "Vâng, thay đổi",
+    "cancel": "Hủy",
+    "noAccess": "Không có quyền quản trị trên máy chủ này",
+    "noAccessHint": "Máy chủ hiện tại không cấp quyền xem hoặc thay đổi thanh ghi inverter. Hãy kết nối tới IP máy chủ có quyền quản trị."
   }
 }

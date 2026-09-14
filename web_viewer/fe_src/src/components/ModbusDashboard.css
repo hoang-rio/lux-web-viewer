@@ -1,0 +1,525 @@
+.modbus-dashboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modbus-dashboard {
+    background: #fff;
+    border-radius: 8px;
+    width: 720px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modbus-dashboard-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #ddd;
+    position: relative;
+}
+
+.modbus-dashboard-header h3 {
+    margin: 0;
+    flex: 1;
+    font-size: 16px;
+}
+
+.modbus-dashboard-header .close-popover {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+    padding: 0 4px;
+}
+
+.modbus-dashboard-header .close-popover:hover {
+    color: #000;
+}
+
+.modbus-refresh-btn {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #666;
+    padding: 2px 8px;
+    margin-right: 8px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.modbus-refresh-btn:hover:not(:disabled) {
+    color: #007bff;
+    border-color: #007bff;
+}
+
+.modbus-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.modbus-message {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    white-space: nowrap;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+}
+
+.modbus-message.success { color: green; }
+.modbus-message.error { color: red; }
+
+.modbus-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid #eee;
+    color: #555;
+}
+
+.modbus-status-bar.ok .modbus-status-dot {
+    background: #28a745;
+}
+
+.modbus-status-bar.bad .modbus-status-dot {
+    background: #dc3545;
+}
+
+.modbus-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.modbus-status-mode {
+    margin-left: auto;
+    color: #888;
+}
+
+.modbus-advanced-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #eee;
+}
+
+.modbus-advanced-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.modbus-advanced-hint {
+    font-size: 11px;
+    color: #888;
+}
+
+.modbus-tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    padding: 0 16px;
+    flex-wrap: wrap;
+}
+
+.modbus-tabs button {
+    flex: 1;
+    padding: 10px 8px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    color: #666;
+    transition: color 0.15s;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.modbus-tabs button.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+.modbus-tabs button:hover { color: #0056b3; }
+
+.modbus-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+
+.modbus-unavailable-note {
+    padding: 10px 12px;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    color: #721c24;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.modbus-no-access {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+    color: #666;
+}
+
+.modbus-no-access-icon {
+    font-size: 40px;
+}
+
+.modbus-no-access-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+.modbus-no-access-hint {
+    margin: 0;
+    font-size: 13px;
+    color: #888;
+    max-width: 360px;
+    line-height: 1.4;
+}
+
+.modbus-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: #fafafa;
+}
+
+.modbus-item.danger {
+    background: #fff3cd;
+    border-color: #ffe08a;
+}
+
+.modbus-danger-mark {
+    flex-shrink: 0;
+    color: #856404;
+    font-size: 15px;
+}
+
+.modbus-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.modbus-item-name {
+    font-weight: bold;
+    font-size: 14px;
+    color: #333;
+}
+
+.modbus-item-unit {
+    font-weight: normal;
+    color: #888;
+    margin-left: 6px;
+    font-size: 12px;
+}
+
+.modbus-item-detail {
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    gap: 10px;
+}
+
+.modbus-item-reg {
+    font-family: monospace;
+    color: #999;
+}
+
+.modbus-verify-hint {
+    font-size: 11px;
+    color: #b8860b;
+}
+
+.modbus-item-editor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.modbus-editor-input {
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 120px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #333;
+}
+
+.modbus-editor-select {
+    padding: 5px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    max-width: 170px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #333;
+}
+
+.modbus-apply-btn {
+    padding: 5px 12px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+}
+
+.modbus-apply-btn:hover:not(:disabled) { opacity: 0.85; }
+.modbus-apply-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+.modbus-item.saving {
+    opacity: 0.6;
+}
+
+.modbus-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.modbus-switch input { opacity: 0; width: 0; height: 0; }
+
+.modbus-switch-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: 0.2s;
+}
+
+.modbus-switch-slider::before {
+    content: '';
+    position: absolute;
+    height: 14px; width: 14px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.modbus-switch input:checked + .modbus-switch-slider { background-color: #28a745; }
+.modbus-switch input:checked + .modbus-switch-slider::before { transform: translateX(16px); }
+.modbus-switch input:disabled + .modbus-switch-slider { opacity: 0.5; cursor: not-allowed; }
+
+.modbus-confirm-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.modbus-confirm {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    max-width: 360px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modbus-confirm h4 {
+    margin: 0;
+    font-size: 15px;
+    color: #333;
+}
+
+.modbus-confirm p {
+    margin: 0;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.4;
+    background: #fff3cd;
+    border: 1px dashed #e0a800;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.modbus-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.cancel-btn {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.cancel-btn:hover { background: #e9ecef; }
+
+.save-btn {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: opacity 0.15s;
+}
+
+.save-btn:hover { opacity: 0.85; }
+
+.no-records {
+    text-align: center;
+    color: #888;
+    padding: 24px 0;
+    font-size: 14px;
+}
+
+@media screen and (max-width: 768px) {
+    .modbus-dashboard { width: 95vw; max-height: 90vh; }
+    .modbus-dashboard-header {
+        flex-wrap: wrap;
+        padding: 12px 12px 8px;
+    }
+    .modbus-dashboard-header h3 {
+        font-size: 14px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .modbus-message {
+        position: static;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        order: 3;
+        margin-top: 4px;
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+    }
+    .modbus-tabs button { flex: 1 1 auto; }
+    .modbus-item { flex-direction: column; align-items: stretch; gap: 8px; }
+    .modbus-item-editor { justify-content: flex-end; }
+}
+
+@media (prefers-color-scheme: dark) {
+    .modbus-dashboard { background: #2a2a2a; color: #eee; }
+    .modbus-dashboard-header { border-bottom-color: #444; }
+    .modbus-dashboard-header h3 { color: #eee; }
+    .modbus-dashboard-header .close-popover { color: #aaa; }
+    .modbus-dashboard-header .close-popover:hover { color: #fff; }
+    .modbus-status-bar { border-bottom-color: #444; color: #ccc; }
+    .modbus-status-mode { color: #999; }
+    .modbus-advanced-row { border-bottom-color: #444; }
+    .modbus-advanced-label { color: #eee; }
+    .modbus-advanced-hint { color: #aaa; }
+    .modbus-tabs { border-bottom-color: #444; }
+    .modbus-tabs button { color: #aaa; }
+    .modbus-tabs button.active { color: #4da3ff; border-bottom-color: #4da3ff; }
+    .modbus-tabs button:hover { color: #6db8ff; }
+
+    .modbus-no-access { color: #bbb; }
+    .modbus-no-access-title { color: #eee; }
+    .modbus-no-access-hint { color: #aaa; }
+
+    .modbus-item { background: #333; border-color: #555; }
+    .modbus-item.danger { background: #3d3311; border-color: #665500; }
+    .modbus-danger-mark { color: #ffc107; }
+    .modbus-item-name { color: #eee; }
+    .modbus-item-unit { color: #aaa; }
+    .modbus-item-detail { color: #aaa; }
+    .modbus-item-reg { color: #777; }
+    .modbus-verify-hint { color: #ffc247; }
+
+    .modbus-editor-input { background: #3a3a3a; border-color: #555; color: #eee; }
+    .modbus-editor-select { background: #3a3a3a; border-color: #555; color: #eee; }
+    .modbus-apply-btn { background: #1a5a9e; }
+    .modbus-apply-btn:hover { background: #2070b8; }
+    .modbus-apply-btn:disabled { background: #444; color: #888; }
+
+    .modbus-refresh-btn { border-color: #666; color: #aaa; }
+    .modbus-refresh-btn:hover:not(:disabled) { color: #4da3ff; border-color: #4da3ff; }
+
+    .modbus-switch-slider { background-color: #555; }
+    .modbus-switch-slider::before { background-color: #fff; }
+
+    .modbus-unavailable-note {
+        background: #3a1515;
+        border-color: #5a2525;
+        color: #ff9a9a;
+    }
+
+    .modbus-message.success { color: #90EE90; }
+    .modbus-message.error { color: #FF7F7F; }
+    .no-records { color: #999; }
+
+    .modbus-confirm { background: #2e2e2e; }
+    .modbus-confirm h4 { color: #eee; }
+    .modbus-confirm p { background: #3d3311; border-color: #665500; color: #ffc247; }
+    .cancel-btn { background: #3a3a3a; color: #ccc; border-color: #666; }
+    .cancel-btn:hover { background: #4a4a4a; color: #eee; }
+    .save-btn { background: #1a5a9e; }
+    .save-btn:hover { background: #2070b8; }
+}

@@ -17,6 +17,8 @@ from html import escape
 from api_storage import read_grid_state, register_device_token
 import tuya_manager
 import trigger_engine
+import modbus_controller
+import modbus_registers
 
 # Load config from .env and environment
 config: dict = {**dotenv_values(".env"), **environ}
@@ -716,6 +718,9 @@ async def basic_auth_middleware(request, handler):
     resp = _deny_if_not_allowed_cidr(request, "/triggers", allowed_methods=("OPTIONS",), web_only=False)
     if resp:
         return resp
+    resp = _deny_if_not_allowed_cidr(request, "/modbus", allowed_methods=("OPTIONS",), web_only=False)
+    if resp:
+        return resp
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Basic "):
@@ -729,6 +734,95 @@ async def basic_auth_middleware(request, handler):
     if username != auth_username or password != auth_password:
         return _auth_html_response(401, "Invalid credentials", "The username or password you provided is incorrect.", include_www_authenticate=True)
     return await handler(request)
+
+# --- Modbus Routes ---
+
+def _modbus_language(request: web.Request) -> str:
+    lang = request.query.get("lang", "en")
+    return "vi" if lang.lower().startswith("vi") else "en"
+
+
+def _modbus_category_name(category: dict, lang: str) -> str:
+    return category.get("name_en") if lang == "en" else category.get("name_vi")
+
+
+async def modbus_status(request: web.Request):
+    try:
+        return web.json_response(modbus_controller.controller.status)
+    except Exception as e:
+        logger.error("Error in modbus_status: %s", e)
+        return web.json_response(modbus_controller.controller.status)
+
+
+async def modbus_registers_route(request: web.Request):
+    try:
+        lang = _modbus_language(request)
+        categories = []
+        for category in modbus_registers.categories():
+            items = [
+                modbus_registers.public_item(item, lang)
+                for item in modbus_registers.get_items(category["key"])
+            ]
+            categories.append({
+                "key": category["key"],
+                "name": _modbus_category_name(category, lang),
+                "items": items,
+            })
+        return web.json_response({
+            "categories": categories,
+            "status": modbus_controller.controller.status,
+            "language": lang,
+        })
+    except Exception as e:
+        logger.error("Error in modbus_registers: %s", e)
+        return web.json_response({"categories": [], "message": str(e)}, status=500)
+
+
+async def modbus_read(request: web.Request):
+    try:
+        if not modbus_controller.controller.available:
+            return web.json_response({
+                "success": False,
+                "message": "Modbus is not available in the current mode",
+                "status": modbus_controller.controller.status,
+            }, status=503)
+        category = request.query.get("category")
+        keys = request.query.get("keys")
+        if keys:
+            key_list = [k.strip() for k in keys.split(",") if k.strip()]
+        elif category:
+            key_list = [item["key"] for item in modbus_registers.get_items(category)]
+        else:
+            key_list = [item["key"] for item in modbus_registers.all_items()]
+        values = await modbus_controller.controller.read_items(key_list)
+        return web.json_response({"success": True, "values": values, "status": modbus_controller.controller.status})
+    except Exception as e:
+        logger.error("Error in modbus_read: %s", e)
+        return web.json_response({"success": False, "message": str(e)}, status=500)
+
+
+async def modbus_write(request: web.Request):
+    try:
+        data = await request.json()
+        key = data.get("key")
+        item = modbus_registers.get_item(key)
+        if item is None:
+            return web.json_response({"success": False, "message": "Unknown register key: %s" % key}, status=400)
+        if not modbus_controller.controller.available:
+            return web.json_response({
+                "success": False,
+                "message": "Modbus is not available in the current mode",
+                "status": modbus_controller.controller.status,
+            }, status=503)
+        new_value = await modbus_controller.controller.write_item(item, data.get("value"), confirm=bool(data.get("confirm")))
+        return web.json_response({"success": True, "key": key, "value": new_value})
+    except ValueError as e:
+        logger.warning("Modbus write rejected: %s", e)
+        return web.json_response({"success": False, "message": str(e)}, status=400)
+    except Exception as e:
+        logger.error("Error in modbus_write: %s", e)
+        return web.json_response({"success": False, "message": str(e)}, status=500)
+
 
 def create_runner():
     app = web.Application(middlewares=[basic_auth_middleware])
@@ -766,6 +860,10 @@ def create_runner():
         web.delete("/triggers/{id}", delete_trigger_route),
         web.post("/triggers/{id}/test", test_trigger_route),
         web.get("/triggers/{id}/history", get_trigger_history_route),
+        web.get("/modbus/status", modbus_status),
+        web.get("/modbus/registers", modbus_registers_route),
+        web.get("/modbus/read", modbus_read),
+        web.post("/modbus/write", modbus_write),
         web.static("/", path.join(path.dirname(__file__), "build"))
     ])
     return web.AppRunner(app, access_log=None)

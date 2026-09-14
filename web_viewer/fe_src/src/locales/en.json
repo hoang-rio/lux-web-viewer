@@ -261,5 +261,31 @@
     "and": "AND",
     "noAddPermission": "No permission to add triggers or devices",
     "noAddPermissionHint": "The current server does not grant admin access for managing triggers and devices. Connect to a server IP that has admin permissions."
+  },
+  "modbus": {
+    "title": "Inverter Modbus",
+    "advanced": "Advanced settings",
+    "advancedHint": "Dangerous settings are hidden. Enable to view and change them.",
+    "available": "Modbus available",
+    "unavailable": "Modbus unavailable",
+    "mode": "Mode",
+    "refresh": "Refresh",
+    "current": "Current",
+    "apply": "Apply",
+    "saving": "Saving...",
+    "danger": "Dangerous setting. Changing this may affect system operation.",
+    "verifyHint": "After applying, read the value again to confirm the inverter accepted the change.",
+    "valueRequired": "Enter a value before applying",
+    "writeSuccess": "Setting applied",
+    "writeFailed": "Failed to apply setting",
+    "loadFailed": "Failed to load modbus registers",
+    "unavailableHint": "Modbus is not available in the current server mode. Inverter registers cannot be read or changed.",
+    "noRegisters": "No registers available",
+    "confirmTitle": "Confirm dangerous change",
+    "confirmDanger": "This is a dangerous setting. Changing it may damage the system or affect operation. Are you sure?",
+    "yes": "Yes, change it",
+    "cancel": "Cancel",
+    "noAccess": "No admin access on this server",
+    "noAccessHint": "The current server does not grant permission to view or change inverter registers. Connect to a server IP that has admin permissions."
   }
 }
