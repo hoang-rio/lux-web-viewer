@@ -137,6 +137,28 @@ class TestParseResponse(unittest.TestCase):
         value = m.parse_response(frame, m.FN_READ_HOLDING)
         self.assertEqual(value, 0x8020)
 
+    def test_read_holding_block_with_value_length_byte(self):
+        # Full holding block reply: value-length byte (80) then 40 register
+        # values, as a fc03 block read returns.
+        values = b"".join(int(k).to_bytes(2, "little") for k in range(40))
+        self.assertEqual(len(values), 80)
+        frame = build_response(m.FN_READ_HOLDING, 0x0000, bytes([80]) + values)
+        register, payload = m.read_response_values(frame, m.FN_READ_HOLDING)
+        self.assertEqual(register, 0)
+        self.assertEqual(len(payload), 80)
+        for k in range(40):
+            self.assertEqual(m.to_int(payload[2 * k:2 * k + 2]), k)
+
+    def test_read_holding_block_without_value_length_byte(self):
+        # Some replies omit the length byte; payload starts right after register.
+        values = b"".join(int(k).to_bytes(2, "little") for k in range(40))
+        frame = build_response(m.FN_READ_HOLDING, 0x0000, values)
+        register, payload = m.read_response_values(frame, m.FN_READ_HOLDING)
+        self.assertEqual(register, 0)
+        self.assertEqual(len(payload), 80)
+        for k in range(40):
+            self.assertEqual(m.to_int(payload[2 * k:2 * k + 2]), k)
+
     def test_write_single_echo(self):
         frame = build_response(m.FN_WRITE_SINGLE, 0x2AF0, bytes([0x34, 0x12]))
         value = m.parse_response(frame, m.FN_WRITE_SINGLE)
