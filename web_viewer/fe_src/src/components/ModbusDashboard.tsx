@@ -344,13 +344,12 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
                 );
               }
               const isCollapsed = collapsed.includes('*') || collapsed.includes(cat.key);
-              const categoryOpen = !isCollapsed;
               return (
                 <div className="modbus-category" key={cat.key}>
                   <button
                     type="button"
                     className="modbus-category-heading"
-                    onClick={() => setCollapsed(categoryOpen ? ['*'] : [cat.key])}
+                    onClick={() => setCollapsed(isCollapsed ? [cat.key] : ['*'])}
                     aria-expanded={!isCollapsed}
                     aria-controls={`modbus-category-${cat.key}`}
                   >
