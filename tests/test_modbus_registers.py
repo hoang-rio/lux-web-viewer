@@ -86,6 +86,23 @@ class TestExtract(unittest.TestCase):
         else:
             self.assertEqual(m.extract_value(item, 465), 46.5)
 
+    def test_number_high_byte(self):
+        ac_power = m.get_item("ac_charge_power")
+        self.assertTrue(ac_power["high_byte"])
+        self.assertEqual(ac_power["reg"], 66)
+        self.assertEqual(m.extract_value(ac_power, 0x6400), 100)
+        self.assertEqual(m.extract_value(ac_power, 0x0064), 0)  # value lives in upper byte
+
+        soc = m.get_item("charge_first_soc_limit")
+        self.assertTrue(soc["high_byte"])
+        self.assertEqual(soc["reg"], 75)
+        self.assertEqual(m.extract_value(soc, 0x5500), 85)
+
+    def test_other_percent_numbers_are_low_byte(self):
+        self.assertFalse(m.get_item("ac_charge_soc_limit").get("high_byte"))
+        self.assertFalse(m.get_item("forced_discharge_soc_limit").get("high_byte"))
+        self.assertEqual(m.extract_value(m.get_item("forced_discharge_soc_limit"), 15), 15)
+
     def test_time(self):
         co_start = m.get_item("ac_charge_time_1_start")
         self.assertIsNotNone(co_start)
@@ -130,6 +147,19 @@ class TestEncode(unittest.TestCase):
         # untouched bits still readable
         buzzer = m.get_item("buzzer")
         self.assertEqual(m.extract_value(buzzer, merged), 1)
+
+    def test_high_byte_round_trip(self):
+        ac_power = m.get_item("ac_charge_power")
+        raw = m.encode_value(ac_power, 100)
+        self.assertEqual(raw, 0x6400)
+        self.assertEqual(m.extract_value(ac_power, raw), 100)
+        with self.assertRaises(ValueError):
+            m.encode_value(ac_power, 101)
+
+        soc = m.get_item("charge_first_soc_limit")
+        raw = m.encode_value(soc, 85)
+        self.assertEqual(raw, 0x5500)
+        self.assertEqual(m.extract_value(soc, raw), 85)
 
 
 class TestPublicItem(unittest.TestCase):

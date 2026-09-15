@@ -277,6 +277,12 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
           ))}
         </div>
         <div className="modbus-content">
+          {refreshing && (
+            <div className="modbus-content-loading" role="status" aria-live="polite">
+              <span className="modbus-content-loading-dot" />
+              {t('modbus.loading')}
+            </div>
+          )}
           {!status?.available && (
             <div className="modbus-unavailable-note">{t('modbus.unavailableHint')}</div>
           )}

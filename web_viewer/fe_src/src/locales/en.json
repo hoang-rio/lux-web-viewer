@@ -270,6 +270,7 @@
     "unavailable": "Modbus unavailable",
     "mode": "Mode",
     "refresh": "Refresh",
+    "loading": "Loading registers...",
     "current": "Current",
     "apply": "Apply",
     "saving": "Saving...",

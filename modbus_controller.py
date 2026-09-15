@@ -17,6 +17,7 @@ import asyncio
 import logging
 import socket
 import threading
+import time
 from typing import Optional
 
 import socket_client
@@ -111,46 +112,80 @@ class ModbusController:
 
     def _blocking_execute_raw(self, frame: bytes, expected_fn: int) -> bytes:
         frame_bytes = bytes(frame)
+        try:
+            expected_register = modbus_service.request_register(frame_bytes)
+        except modbus_service.ModbusError:
+            expected_register = None
         with self._lock:
             sock = socket_client.connect(self._dongle_host, self._dongle_port)
             try:
                 sock.settimeout(DEFAULT_TIMEOUT)
                 sock.sendall(frame_bytes)
+                deadline = time.monotonic() + DEFAULT_TIMEOUT
                 data = b""
                 while True:
-                    chunk = sock.recv(1024)
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        sock.settimeout(remaining)
+                        chunk = sock.recv(1024)
+                    except (TimeoutError, socket.timeout):
+                        break
                     if not chunk:
                         break
                     data += chunk
-                    # The response carries its own length in the header; a read
-                    # reply is one byte longer than the request (value-length byte).
-                    if len(data) >= 8:
+                    # The dongle may push telemetry / other-transaction replies on
+                    # any open connection (lxp-bridge wait_for_reply). Consume
+                    # complete frames and keep only the one matching our request.
+                    while len(data) >= 8:
                         expected = modbus_service.to_int(data[4:6]) + modbus_service._FRAME_LENGTH_ADJUST
-                        if len(data) >= expected or expected > 4096:
+                        if expected > 4096 or expected < 8:
+                            data = data[1:]  # resync one byte at a time
+                            continue
+                        if len(data) < expected:
                             break
+                        candidate, data = data[:expected], data[expected:]
+                        try:
+                            fn = modbus_service.response_function(candidate)
+                        except modbus_service.ModbusError:
+                            continue  # not a parsable frame; drop it
+                        if fn != expected_fn:
+                            logger.warning(
+                                "Modbus discarding unrelated frame fn=0x%02x (wanted 0x%02x reg=%s)",
+                                fn, expected_fn, expected_register,
+                            )
+                            continue
+                        if (
+                            expected_register is not None
+                            and modbus_service.response_register(candidate) != expected_register
+                        ):
+                            logger.warning(
+                                "Modbus discarding frame for reg=%s (wanted reg=%s)",
+                                modbus_service.response_register(candidate), expected_register,
+                            )
+                            continue
+                        logger.debug(
+                            "Modbus reply fn=0x%02x reg=%s len=%d frame=%s",
+                            expected_fn,
+                            expected_register,
+                            len(candidate),
+                            candidate.hex(),
+                        )
+                        return candidate
             except (TimeoutError, socket.timeout):
                 logger.warning(
                     "Modbus %s reg=%s: timeout waiting for reply (got %d bytes)",
                     expected_fn,
-                    modbus_service.request_register(frame),
+                    expected_register,
                     len(data),
                 )
-                data = data or b""
             finally:
                 try:
                     sock.close()
                 except Exception:
                     pass
-        if not data:
-            raise ModbusTimeoutError("No Modbus response from dongle")
-        logger.debug(
-            "Modbus reply fn=0x%02x reg=%s len=%d frame=%s",
-            expected_fn,
-            modbus_service.request_register(frame),
-            len(data),
-            data.hex(),
-        )
-        return data
+        raise ModbusTimeoutError("No Modbus response from dongle")
 
     async def _server_execute_raw(self, frame: bytes, expected_fn: int) -> bytes:
         if self._server is None or self._server_loop is None:

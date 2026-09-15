@@ -268,6 +268,7 @@
     "unavailable": "Modbus không sẵn sàng",
     "mode": "Chế độ",
     "refresh": "Làm mới",
+    "loading": "Đang tải registers...",
     "current": "Hiện tại",
     "apply": "Áp dụng",
     "saving": "Đang lưu...",

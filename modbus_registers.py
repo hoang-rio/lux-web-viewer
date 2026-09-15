@@ -249,6 +249,7 @@ _ITEMS = [
         "unit": "%",
         "min": 0,
         "max": 100,
+        "high_byte": True,
     },
     {
         "key": "ac_charge_soc_limit",
@@ -330,6 +331,7 @@ _ITEMS = [
         "unit": "%",
         "min": 0,
         "max": 101,
+        "high_byte": True,
     },
     {
         "key": "charge_first_time_1_start",
@@ -733,9 +735,12 @@ def mask_for(item: dict) -> tuple:
 
 def extract_value(item: dict, raw: int) -> object:
     """Convert a raw register value into the item's display value."""
-    shift, mask = mask_for(item)
-    raw = (raw & mask) >> shift
     kind = item["kind"]
+    if kind == KIND_NUMBER and item.get("high_byte"):
+        raw = (raw >> 8) & 0xFF
+    else:
+        shift, mask = mask_for(item)
+        raw = (raw & mask) >> shift
     if kind == KIND_TIME:
         hour = (raw >> 8) & 0xFF
         minute = raw & 0xFF
@@ -768,8 +773,12 @@ def encode_value(item: dict, value) -> int:
         if item.get("max") is not None and value > item["max"]:
             raise ValueError("Value %s above maximum %s" % (value, item["max"]))
         if item.get("scale"):
-            return int(round(value / item["scale"]))
-        return int(value)
+            raw = int(round(value / item["scale"]))
+        else:
+            raw = int(value)
+        if item.get("high_byte"):
+            raw = (raw & 0xFF) << 8
+        return raw
     if kind == KIND_TIME:
         if isinstance(value, str):
             parts = value.strip().split(":")

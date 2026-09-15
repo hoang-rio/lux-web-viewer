@@ -192,4 +192,49 @@ describe('ModbusDashboard', () => {
 
     expect(await screen.findByText('modbus.noAccess')).toBeInTheDocument();
   });
+
+  it('shows a content loading state while a refresh request is in flight', async () => {
+    const readResolvers: Array<(v: unknown) => void> = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/modbus/read')) {
+        // Hold the read request so the refresh stays in-flight.
+        return new Promise((resolve) => {
+          readResolvers.push(resolve);
+        });
+      }
+      return makeFetch()(input, init);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ModbusDashboard onClose={() => {}} />);
+
+    expect(await screen.findByText('Charge current')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTitle('modbus.refresh'));
+
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('modbus.loading')).toBeInTheDocument();
+
+    // The refresh triggers a second /modbus/read request (registers resolve first).
+    await waitFor(() => {
+      expect(readResolvers.length).toBeGreaterThan(0);
+    });
+    const response = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        values: { buzzer: 1, charge_current: 46.5, ac_charge_type: 0, grid_export_enable: 0 },
+        status: fixture.status,
+      }),
+    };
+    readResolvers.forEach((resolve) => resolve(response));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/modbus/read'))).toBe(true);
+    });
+  });
 });
