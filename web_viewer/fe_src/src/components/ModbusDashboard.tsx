@@ -400,6 +400,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
         </div>
       )}
     </div>
+    </div>
   );
 };
 
