@@ -18,9 +18,11 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
   const [values, setValues] = useState<Record<string, DisplayValue>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [activeCategory, setActiveCategory] = useState<string>('');
+  const [collapsed, setCollapsed] = useState<string[]>([]);
   const [advanced, setAdvanced] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [readState, setReadState] = useState<'loading' | 'success' | 'error'>('loading');
   const [noAccess, setNoAccess] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -30,6 +32,9 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
 
   const fetchAll = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
+    setReadState('loading');
+    setValues({});
+    setMessage(null);
     try {
       const regsRes = await fetch(`${apiBase}/modbus/registers?lang=${i18n.language}`);
       if (!regsRes.ok) {
@@ -46,10 +51,15 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
       const readData = await readRes.json();
       if (readData.success && readData.values) {
         setValues(readData.values);
+        setReadState('success');
+      } else {
+        setReadState('error');
+        setMessage({ text: readData.message || t('modbus.readFailed'), type: 'error' });
       }
       if (readData.status) setStatus(readData.status);
     } catch (err) {
       logUtil.error('Failed to fetch modbus registers', err);
+      setReadState('error');
       setMessage({ text: t('modbus.loadFailed'), type: 'error' });
     } finally {
       setLoading(false);
@@ -122,10 +132,15 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     setRefreshing(false);
   };
 
+  const toggleCollapse = (key: string) => {
+    setCollapsed((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  };
+
   const renderEditor = (item: IModbusItem) => {
     const current = values[item.key];
     const kind = itemKind(item);
-    const disabled = !status?.available || savingKey !== null;
+    const editable = readState === 'success';
+    const disabled = !status?.available || savingKey !== null || !editable;
 
     if (kind === 'toggle') {
       const checked = (current === 1 || current === true);
@@ -193,6 +208,58 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     const current = values[item.key];
     if (current === null || current === undefined) return '—';
     return String(current) + (item.unit ? ` ${item.unit}` : '');
+  };
+
+  const renderRow = (item: IModbusItem) => {
+    if (item.danger && !advanced) return null;
+    const kind = itemKind(item);
+    const current = values[item.key];
+    const disabled = !status?.available || savingKey !== null || readState !== 'success';
+    return (
+      <div
+        key={item.key}
+        className={`modbus-item ${item.danger ? 'danger' : ''} ${savingKey === item.key ? 'saving' : ''}`}
+      >
+        {item.danger && (
+          <span className="modbus-danger-mark" title={t('modbus.danger')}>⚠</span>
+        )}
+        <div className="modbus-item-info">
+          <div className="modbus-item-name">
+            {item.name}
+            {item.unit && <span className="modbus-item-unit">{item.unit}</span>}
+          </div>
+          <div className="modbus-item-detail">
+            <span className="modbus-item-current">
+              {t('modbus.current')}: {renderValue(item)}
+            </span>
+            <span className="modbus-item-reg">R{item.reg}</span>
+          </div>
+          {item.verify && (
+            <div className="modbus-verify-hint">{t('modbus.verifyHint')}</div>
+          )}
+        </div>
+        <div className="modbus-item-editor">
+          {renderEditor(item)}
+          {itemKind(item) !== 'toggle' && (
+            <button
+              className="modbus-apply-btn"
+              onClick={() => {
+                const draft = drafts[item.key];
+                if (draft === undefined || draft === '') {
+                  setMessage({ text: t('modbus.valueRequired'), type: 'error' });
+                  return;
+                }
+                const value = itemKind(item) === 'time' ? draft : Number(draft);
+                applyWrite(item, value, item.danger);
+              }}
+              disabled={!status?.available || savingKey !== null || (drafts[item.key] === undefined)}
+            >
+              {savingKey === item.key ? t('modbus.saving') : t('modbus.apply')}
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   if (noAccess) {
@@ -265,18 +332,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
           </label>
           <span className="modbus-advanced-hint">{t('modbus.advancedHint')}</span>
         </div>
-        <div className="modbus-tabs">
-          {categories.map((cat) => (
-            <button
-              key={cat.key}
-              className={activeCategory === cat.key ? 'active' : ''}
-              onClick={() => setActiveCategory(cat.key)}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-        <div className="modbus-content">
+        <div className="modbus-categories">
           {refreshing && (
             <div className="modbus-content-loading" role="status" aria-live="polite">
               <span className="modbus-content-loading-dot" />
@@ -286,61 +342,48 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
           {!status?.available && (
             <div className="modbus-unavailable-note">{t('modbus.unavailableHint')}</div>
           )}
-          {!activeCategoryData ? (
+          {categories.length === 0 ? (
             <div className="no-records">{t('modbus.noRegisters')}</div>
           ) : (
-            activeCategoryData.items.map((item) => {
-              if (item.danger && !advanced) return null;
+            categories.map((cat) => {
+              const visibleItems = cat.items.filter((item) => !item.danger || advanced);
+              if (visibleItems.length === 0) return null;
+              if (cat.items.length === 1) {
+                return (
+                  <div className="modbus-category" key={cat.key}>
+                    {visibleItems.map((item) => renderRow(item))}
+                  </div>
+                );
+              }
+              const isCollapsed = collapsed.includes(cat.key);
               return (
-                <div
-                  key={item.key}
-                  className={`modbus-item ${item.danger ? 'danger' : ''} ${savingKey === item.key ? 'saving' : ''}`}
-                >
-                  {item.danger && (
-                    <span className="modbus-danger-mark" title={t('modbus.danger')}>⚠</span>
+                <div className="modbus-category" key={cat.key}>
+                  <button
+                    type="button"
+                    className="modbus-category-heading"
+                    onClick={() => toggleCollapse(cat.key)}
+                    aria-expanded={!isCollapsed}
+                    aria-controls={`modbus-category-${cat.key}`}
+                  >
+                    <span className={`modbus-category-caret ${isCollapsed ? 'collapsed' : ''}`}>
+                      {isCollapsed ? '▸' : '▾'}
+                    </span>
+                    <span className="modbus-category-name">{cat.name}</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div
+                      id={`modbus-category-${cat.key}`}
+                      className="modbus-category-items"
+                    >
+                      {visibleItems.map((item) => renderRow(item))}
+                    </div>
                   )}
-                  <div className="modbus-item-info">
-                    <div className="modbus-item-name">
-                      {item.name}
-                      {item.unit && <span className="modbus-item-unit">{item.unit}</span>}
-                    </div>
-                    <div className="modbus-item-detail">
-                      <span className="modbus-item-current">
-                        {t('modbus.current')}: {renderValue(item)}
-                      </span>
-                      <span className="modbus-item-reg">R{item.reg}</span>
-                    </div>
-                    {item.verify && (
-                      <div className="modbus-verify-hint">{t('modbus.verifyHint')}</div>
-                    )}
-                  </div>
-                  <div className="modbus-item-editor">
-                    {renderEditor(item)}
-                    {itemKind(item) !== 'toggle' && (
-                      <button
-                        className="modbus-apply-btn"
-                        onClick={() => {
-                          const draft = drafts[item.key];
-                          if (draft === undefined || draft === '') {
-                            setMessage({ text: t('modbus.valueRequired'), type: 'error' });
-                            return;
-                          }
-                          const value = itemKind(item) === 'time' ? draft : Number(draft);
-                          applyWrite(item, value, item.danger);
-                        }}
-                        disabled={!status?.available || savingKey !== null || (drafts[item.key] === undefined)}
-                      >
-                        {savingKey === item.key ? t('modbus.saving') : t('modbus.apply')}
-                      </button>
-                    )}
-                  </div>
                 </div>
               );
             })
           )}
         </div>
-      </div>
-      {pendingDanger && (
+            {pendingDanger && (
         <div className="modbus-confirm-overlay">
           <div className="modbus-confirm">
             <h4>{t('modbus.confirmTitle')}</h4>
