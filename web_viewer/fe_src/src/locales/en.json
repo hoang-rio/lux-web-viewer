@@ -203,8 +203,6 @@
     "deviceDeleted": "Device deleted",
     "confirmDeleteDevice": "Delete this device?",
     "rename": "Rename",
-    "save": "Save",
-    "cancel": "Cancel",
     "renameFailed": "Failed to rename device",
     "commandSent": "Command sent successfully",
     "controlFailed": "Failed to send command",
@@ -287,6 +285,14 @@
     "yes": "Yes, change it",
     "cancel": "Cancel",
     "noAccess": "No admin access on this server",
-    "noAccessHint": "The current server does not grant permission to view or change inverter registers. Connect to a server IP that has admin permissions."
+    "noAccessHint": "The current server does not grant permission to view or change inverter registers. Connect to a server IP that has admin permissions.",
+    "cat": {
+      "beep": "Beep Audio Enable/Disable",
+      "application": "Application setting",
+      "charge": "Charge setting",
+      "discharge": "Discharge setting",
+      "battery": "Battery"
+    },
+    "reg": {}
   }
 }

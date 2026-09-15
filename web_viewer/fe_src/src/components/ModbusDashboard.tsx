@@ -90,6 +90,11 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
       const data = await res.json();
       if (res.ok && data.success) {
         setValues((prev) => ({ ...prev, [item.key]: data.value }));
+        setDrafts((prev) => {
+          const next = { ...prev };
+          delete next[item.key];
+          return next;
+        });
         setMessage({ text: t('modbus.writeSuccess'), type: 'success' });
       } else {
         setMessage({ text: data.message || t('modbus.writeFailed'), type: 'error' });
@@ -142,7 +147,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
             type="checkbox"
             checked={checked}
             disabled={disabled}
-            aria-label={item.name}
+            aria-label={item.name || t(`modbus.reg.${item.key}`)}
             onChange={(e) => toggleItem(item, e.target.checked)}
           />
           <span className="modbus-switch-slider"></span>
@@ -214,7 +219,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
         )}
         <div className="modbus-item-info">
           <div className="modbus-item-name">
-            {item.name}
+            {t(`modbus.reg.${item.key}`, { defaultValue: item.name })}
             {item.unit && <span className="modbus-item-unit">{item.unit}</span>}
           </div>
           <div className="modbus-item-detail">
@@ -356,7 +361,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
                     <span className={`modbus-category-caret ${isCollapsed ? 'collapsed' : ''}`}>
                       {isCollapsed ? '▸' : '▾'}
                     </span>
-                    <span className="modbus-category-name">{cat.name}</span>
+                    <span className="modbus-category-name">{t(`modbus.cat.${cat.key}`, { defaultValue: cat.name })}</span>
                   </button>
                   {!isCollapsed && (
                     <div
