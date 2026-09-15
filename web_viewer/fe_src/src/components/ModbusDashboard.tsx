@@ -17,7 +17,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
   const [status, setStatus] = useState<IModbusStatus | null>(null);
   const [values, setValues] = useState<Record<string, DisplayValue>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState<string[]>(['*']);
   const [advanced, setAdvanced] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,10 +126,6 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     setRefreshing(true);
     await fetchAll(true);
     setRefreshing(false);
-  };
-
-  const toggleCollapse = (key: string) => {
-    setCollapsed((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
   const renderEditor = (item: IModbusItem) => {
@@ -347,13 +343,14 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
                   </div>
                 );
               }
-              const isCollapsed = collapsed.includes(cat.key);
+              const isCollapsed = collapsed.includes('*') || collapsed.includes(cat.key);
+              const categoryOpen = !isCollapsed;
               return (
                 <div className="modbus-category" key={cat.key}>
                   <button
                     type="button"
                     className="modbus-category-heading"
-                    onClick={() => toggleCollapse(cat.key)}
+                    onClick={() => setCollapsed(categoryOpen ? ['*'] : [cat.key])}
                     aria-expanded={!isCollapsed}
                     aria-controls={`modbus-category-${cat.key}`}
                   >
