@@ -15,7 +15,7 @@ Each item describes how its value maps to a single holding register:
               ``bit0`` + ``bitwidth``.
     number  - numeric range min/max (in display units) with optional ``scale``
               (raw = round(value / scale)); unit follows ``unit``.
-    time    - packed ``(hour << 8) | minute``, value exchanged as "HH:MM".
+    time    - packed ``(minute << 8) | hour``, value exchanged as "HH:MM"
 
   flags
     danger  - hidden behind the "Advanced" checkbox and rendered with a warning
@@ -742,8 +742,8 @@ def extract_value(item: dict, raw: int) -> object:
         shift, mask = mask_for(item)
         raw = (raw & mask) >> shift
     if kind == KIND_TIME:
-        hour = (raw >> 8) & 0xFF
-        minute = raw & 0xFF
+        minute = (raw >> 8) & 0xFF
+        hour = raw & 0xFF
         return "%02d:%02d" % (hour, minute)
     if kind == KIND_NUMBER and item.get("scale"):
         return round(raw * item["scale"], 2)
@@ -793,7 +793,7 @@ def encode_value(item: dict, value) -> int:
             hour, minute = divmod(total, 60)
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError("Invalid time %r (hours 0-23, minutes 0-59)" % value)
-        return (hour << 8) | minute
+        return (minute << 8) | hour
     raise ValueError("Unknown kind %s" % kind)
 
 

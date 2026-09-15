@@ -107,8 +107,8 @@ class TestExtract(unittest.TestCase):
         co_start = m.get_item("ac_charge_time_1_start")
         self.assertIsNotNone(co_start)
         self.assertEqual(co_start["kind"], "time")
-        # register raw (hour<<8)|minute within the item's bit range
-        self.assertEqual(m.extract_value(co_start, 0x0A2F), "10:47")
+        # register raw (minute<<8)|hour within the item's bit range
+        self.assertEqual(m.extract_value(co_start, 0x2F0A), "10:47")
 
 
 class TestEncode(unittest.TestCase):
@@ -133,7 +133,7 @@ class TestEncode(unittest.TestCase):
     def test_time_encode_and_decode(self):
         co_start = m.get_item("ac_charge_time_1_start")
         raw = m.encode_value(co_start, "10:47")
-        self.assertEqual(raw, 0x0A2F)
+        self.assertEqual(raw, 0x2F0A)
         with self.assertRaises(ValueError):
             m.encode_value(co_start, "25:00")
         with self.assertRaises(ValueError):
