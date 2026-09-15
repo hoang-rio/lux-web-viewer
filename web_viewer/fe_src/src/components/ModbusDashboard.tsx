@@ -17,7 +17,6 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
   const [status, setStatus] = useState<IModbusStatus | null>(null);
   const [values, setValues] = useState<Record<string, DisplayValue>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [activeCategory, setActiveCategory] = useState<string>('');
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [advanced, setAdvanced] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,9 +43,6 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
       const regsData = await regsRes.json();
       setCategories(regsData.categories || []);
       if (regsData.status) setStatus(regsData.status);
-      if (regsData.categories && regsData.categories.length > 0) {
-        setActiveCategory((prev) => prev || regsData.categories[0].key);
-      }
       const readRes = await fetch(`${apiBase}/modbus/read`);
       const readData = await readRes.json();
       if (readData.success && readData.values) {
@@ -212,9 +208,6 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
 
   const renderRow = (item: IModbusItem) => {
     if (item.danger && !advanced) return null;
-    const kind = itemKind(item);
-    const current = values[item.key];
-    const disabled = !status?.available || savingKey !== null || readState !== 'success';
     return (
       <div
         key={item.key}
@@ -294,7 +287,6 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     );
   }
 
-  const activeCategoryData = categories.find((c) => c.key === activeCategory);
 
   return (
     <div className="modbus-dashboard-overlay">
