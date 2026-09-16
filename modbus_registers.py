@@ -48,8 +48,8 @@ _ITEMS = [
     {
         "key": "buzzer",
         "category": CATEGORY_BEEP,
-        "name_en": "Beep audio enable/disable",
-        "name_vi": "Bật/tắt âm thanh còi báo",
+        "name_en": "Beep audio",
+        "name_vi": "âm thanh còi báo",
         "reg": 110,
         "kind": KIND_TOGGLE,
         "bit": 7,
@@ -108,7 +108,7 @@ _ITEMS = [
     {
         "key": "grid_export_enable",
         "category": CATEGORY_APPLICATION,
-        "name_en": "Grid export enable/disable",
+        "name_en": "Grid export",
         "name_vi": "Cho phép xuất điện lưới",
         "reg": 21,
         "kind": KIND_TOGGLE,
