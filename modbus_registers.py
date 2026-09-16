@@ -713,10 +713,7 @@ def public_item(item: dict, language: str = "en") -> dict:
     if item.get("scale") is not None:
         result["scale"] = item["scale"]
     if item.get("options"):
-        result["options"] = [
-            {"value": opt["value"], "label": opt["label_en"] if lang == "en" else opt["label_vi"]}
-            for opt in item["options"]
-        ]
+        result["options"] = [{"value": opt["value"]} for opt in item["options"]]
     return result
 
 

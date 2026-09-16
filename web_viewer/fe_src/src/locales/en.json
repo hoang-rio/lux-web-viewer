@@ -354,6 +354,42 @@
       "equalization_voltage": "Battery equalization voltage",
       "equalization_interval": "Battery equalization interval",
       "equalization_time": "Battery equalization time"
+    },
+    "opt": {
+      "eps_voltage": {
+        "208": "208 V",
+        "220": "220 V",
+        "230": "230 V",
+        "240": "240 V",
+        "277": "277 V"
+      },
+      "eps_frequency": {
+        "50": "50 Hz",
+        "60": "60 Hz"
+      },
+      "output_priority": {
+        "0": "Battery first",
+        "1": "PV first",
+        "2": "AC first"
+      },
+      "line_mode": {
+        "0": "APL",
+        "1": "UPS",
+        "2": "GEN"
+      },
+      "ac_charge_type": {
+        "0": "Off",
+        "1": "Time",
+        "2": "Voltage",
+        "3": "SOC",
+        "4": "Voltage + Time",
+        "5": "SOC + Time"
+      },
+      "discharge_control_type": {
+        "0": "Voltage",
+        "1": "SOC",
+        "2": "Voltage + SOC"
+      }
     }
   }
 }

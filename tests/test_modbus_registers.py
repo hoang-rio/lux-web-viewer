@@ -178,7 +178,10 @@ class TestPublicItem(unittest.TestCase):
         self.assertIn("bit0", pub)
         self.assertTrue(pub["options"])
         # Vietnamese labels
-        self.assertTrue(any("tắt" in o["label"].lower() or "off" in o["label"].lower() for o in pub["options"]))
+        # New FE-only contract: the payload option carries NO per-language label
+        # (text lives in the FE locale mirror modbus.opt.<regKey>.<value>).
+        self.assertTrue(all(o.keys() <= {"value"} for o in pub["options"]))
+        self.assertTrue(all(opt["value"] == opt["value"] for opt in pub["options"]))
 
     def test_time_item(self):
         pub = m.public_item(m.get_item("ac_charge_time_1_start"), "en")
