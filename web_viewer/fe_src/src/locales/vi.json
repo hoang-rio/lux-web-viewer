@@ -331,11 +331,11 @@
       }
     },
     "cat": {
-      "beep": "m",
-      "application": "à",
-      "charge": "à",
-      "discharge": "à",
-      "battery": "i"
+      "beep": "Âm thanh còi báo",
+      "application": "Cài đặt ứng dụng",
+      "charge": "Cài đặt sạc",
+      "discharge": "Cài đặt xả",
+      "battery": "Pin lưu trữ"
     },
     "reg": {
       "buzzer": "Âm thanh còi báo",
