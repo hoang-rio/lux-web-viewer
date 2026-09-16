@@ -186,10 +186,13 @@ class TestPublicItem(unittest.TestCase):
         self.assertNotIn("options", pub)
 
     def test_language_labels(self):
+        """FE locale = sole per-language text source. The register payload carries NO
+        per-language name; the bilingual wording lives in the FE locale mirror only."""
         item = m.get_item("buzzer")
-        en = m.public_item(item, "en")
-        vi = m.public_item(item, "vi")
-        self.assertNotEqual(en["name"], vi["name"])
+        pub = m.public_item(item, "en")
+        self.assertNotIn("name", pub)
+        asrt = m.public_item(item, "vi")
+        self.assertNotIn("name", asrt)
 
 
 if __name__ == "__main__":

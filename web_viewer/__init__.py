@@ -742,10 +742,6 @@ def _modbus_language(request: web.Request) -> str:
     return "vi" if lang.lower().startswith("vi") else "en"
 
 
-def _modbus_category_name(category: dict, lang: str) -> str:
-    return category.get("name_en") if lang == "en" else category.get("name_vi")
-
-
 async def modbus_status(request: web.Request):
     try:
         return web.json_response(modbus_controller.controller.status)
@@ -765,7 +761,6 @@ async def modbus_registers_route(request: web.Request):
             ]
             categories.append({
                 "key": category["key"],
-                "name": _modbus_category_name(category, lang),
                 "items": items,
             })
         return web.json_response({

@@ -147,7 +147,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
             type="checkbox"
             checked={checked}
             disabled={disabled}
-            aria-label={item.name || t(`modbus.reg.${item.key}`)}
+            aria-label={t(`modbus.reg.${item.key}`)}
             onChange={(e) => toggleItem(item, e.target.checked)}
           />
           <span className="modbus-switch-slider"></span>
@@ -219,7 +219,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
         )}
         <div className="modbus-item-info">
           <div className="modbus-item-name">
-            {t(`modbus.reg.${item.key}`, { defaultValue: item.name })}
+            {t(`modbus.reg.${item.key}`)}
             {item.unit && <span className="modbus-item-unit">{item.unit}</span>}
           </div>
           <div className="modbus-item-detail">
@@ -361,7 +361,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
                     <span className={`modbus-category-caret ${isCollapsed ? 'collapsed' : ''}`}>
                       {isCollapsed ? '▸' : '▾'}
                     </span>
-                    <span className="modbus-category-name">{t(`modbus.cat.${cat.key}`, { defaultValue: cat.name })}</span>
+                    <span className="modbus-category-name">{t(`modbus.cat.${cat.key}`)}</span>
                   </button>
                   {!isCollapsed && (
                     <div

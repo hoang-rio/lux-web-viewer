@@ -693,7 +693,6 @@ def public_item(item: dict, language: str = "en") -> dict:
     lang = "vi" if language and language.lower().startswith("vi") else "en"
     result = {
         "key": item["key"],
-        "name": item.get("name_en") if lang == "en" else item.get("name_vi"),
         "reg": item["reg"],
         "kind": item["kind"],
         "danger": bool(item.get("danger")),
