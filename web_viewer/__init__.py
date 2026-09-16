@@ -792,8 +792,12 @@ async def modbus_read(request: web.Request):
         values = await modbus_controller.controller.read_items(key_list)
         return web.json_response({"success": True, "values": values, "status": modbus_controller.controller.status})
     except Exception as e:
-        logger.error("Error in modbus_read: %s", e)
-        return web.json_response({"success": False, "message": str(e)}, status=500)
+        # asyncio.wait_for (and dongle_server.py:292) surface a BARE
+        # asyncio.TimeoutError() whose str() is the empty string; the FE
+        # would otherwise receive {"message": ""} with nothing to show.
+        message = str(e) or "No response from Modbus dongle (timeout)"
+        logger.error("Error in modbus_read: %s", message)
+        return web.json_response({"success": False, "message": message}, status=500)
 
 
 async def modbus_write(request: web.Request):
@@ -815,8 +819,9 @@ async def modbus_write(request: web.Request):
         logger.warning("Modbus write rejected: %s", e)
         return web.json_response({"success": False, "message": str(e)}, status=400)
     except Exception as e:
-        logger.error("Error in modbus_write: %s", e)
-        return web.json_response({"success": False, "message": str(e)}, status=500)
+        message = str(e) or "Failed to write Modbus register (timeout)"
+        logger.error("Error in modbus_write: %s", message)
+        return web.json_response({"success": False, "message": message}, status=500)
 
 
 def create_runner():
