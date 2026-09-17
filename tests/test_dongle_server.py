@@ -1,0 +1,649 @@
+import asyncio
+import logging
+import unittest
+
+import modbus_service as m
+import modbus_controller as mc
+from dongle_server import DongleServer
+
+DONGLE = "1234567890"
+INV = "ABCDEFGHIJ"
+
+
+def _holding_reply(register: int, values: bytes) -> bytes:
+    return m.build_response_frame(
+        dongle_serial=DONGLE,
+        inverter_serial=INV,
+        device_fn=m.FN_READ_HOLDING,
+        register=register,
+        payload=bytes([len(values)]) + values,
+    )
+
+
+def _input_reply(register: int, values: bytes) -> bytes:
+    return m.build_response_frame(
+        dongle_serial=DONGLE,
+        inverter_serial=INV,
+        device_fn=m.FN_READ_INPUT,
+        register=register,
+        payload=bytes([len(values)]) + values,
+    )
+
+
+def _holding_reply_serial(
+    dongle_serial: str, inverter_serial: str, register: int, values: bytes
+) -> bytes:
+    return m.build_response_frame(
+        dongle_serial=dongle_serial,
+        inverter_serial=inverter_serial,
+        device_fn=m.FN_READ_HOLDING,
+        register=register,
+        payload=bytes([len(values)]) + values,
+    )
+
+
+def _input_reply_serial(
+    dongle_serial: str, inverter_serial: str, register: int, values: bytes
+) -> bytes:
+    return m.build_response_frame(
+        dongle_serial=dongle_serial,
+        inverter_serial=inverter_serial,
+        device_fn=m.FN_READ_INPUT,
+        register=register,
+        payload=bytes([len(values)]) + values,
+    )
+
+
+class _FakeDongle:
+    """Serves a DongleServer connection like a real dongle.
+
+    Replies to fn=0x04 ReadInput polls and to fn=0x03 ReadHolding block reads.
+    Mirrors the READ_LOW_FREQ poll cadence the server drives in SERVER mode.
+    """
+
+    def __init__(self, port: int, sleep_time: int):
+        self.port = port
+        self.sleep_time = sleep_time
+        self.outstanding_reads = 0
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        last_send = None
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    if fn == m.FN_READ_HOLDING:
+                        self.outstanding_reads += 1
+                        vals = b"".join(
+                            int(reg + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_holding_reply(reg, vals))
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_input_reply(reg, vals))
+                    await writer.drain()
+                    last_send = asyncio.get_running_loop().time()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+class TestServerModeReadInterleave(unittest.IsolatedAsyncioTestCase):
+    async def _run_dongle_and_read(self, sleep_time: int):
+        config = {
+            "WORKING_MODE": "SERVER",
+            "DONGLE_SERIAL": DONGLE,
+            "INVERT_SERIAL": INV,
+            "SERVER_MODE_HOST": "127.0.0.1",
+            "SERVER_MODE_PORT": 0,
+            "SERVER_MODE_TIMEOUT": 5,
+            "SLEEP_TIME": sleep_time,
+            "READ_INPUT_MODE": "ALL",
+            "READ_LOW_FREQ_INTERVAL": 1,
+        }
+        server = DongleServer(logging.getLogger("dongle.server"), config)
+        server_task = asyncio.create_task(server.start_server())
+        await asyncio.sleep(0.1)
+        sock = server._DongleServer__server.sockets[0]
+        config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+        dongle = _FakeDongle(config["SERVER_MODE_PORT"], sleep_time)
+        dongle_task = asyncio.create_task(dongle.run())
+        await asyncio.sleep(0.2)
+
+        controller = mc.ModbusController()
+        controller.configure(config)
+        controller.set_server(server, asyncio.get_running_loop())
+
+        try:
+            # Span 3 holding blocks (0/80/160) so several fc03 exchanges are
+            # interleaved with the ReadInput poll replies.
+            values = await controller.read_items(
+                ["eps_seamless", "buzzer", "warning_voltage"]
+            )
+        finally:
+            dongle_task.cancel()
+            try:
+                await dongle_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            server_task.cancel()
+            try:
+                await server_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            await server.stop_server()
+
+        # Fake dongle answers each block with values base+offset, so each item's
+        # raw value equals its register address; after kind/scale transforms:
+        # eps_seamless (toggle bit 8) 21>>8=0, buzzer (toggle bit 7) 110>>7=0,
+        # warning_voltage (scale 0.1) 162*0.1=16.2.
+        self.assertEqual(values["eps_seamless"], 0)
+        self.assertEqual(values["buzzer"], 0)
+        self.assertEqual(values["warning_voltage"], 16.2)
+
+    async def test_read_does_not_time_out_with_large_sleep_time(self):
+        # Regression: the poll loop used to block in interruptible_sleep(SLEEP_TIME)
+        # while a Modbus reply was already in flight, so the caller's 6s timeout
+        # fired and read_items raised TimeoutError.
+        await asyncio.wait_for(
+            self._run_dongle_and_read(sleep_time=120), timeout=20
+        )
+
+    async def test_read_with_small_sleep_time(self):
+        await asyncio.wait_for(
+            self._run_dongle_and_read(sleep_time=1), timeout=20
+        )
+
+    async def test_read_does_not_drop_commands_on_busy_dongle(self):
+        """Regression: a real dongle processes one command at a time and
+        silently drops any command that arrives while it is busy (~0.6s).
+        The server used to fire the "after modbus" poll and the next queued
+        Modbus request ~8ms apart, so the Modbus request was dropped and the
+        read timed out after 6s.  Writes must be spaced by a minimum gap."""
+
+        async def run_busy_dongle_case() -> None:
+            config = {
+                "WORKING_MODE": "SERVER",
+                "DONGLE_SERIAL": DONGLE,
+                "INVERT_SERIAL": INV,
+                "SERVER_MODE_HOST": "127.0.0.1",
+                "SERVER_MODE_PORT": 0,
+                "SERVER_MODE_TIMEOUT": 5,
+                "SLEEP_TIME": 120,
+                "READ_INPUT_MODE": "INPUT1,INPUT3",
+                "READ_LOW_FREQ_INTERVAL": 60,
+            }
+            server = DongleServer(logging.getLogger("dongle.server"), config)
+            server_task = asyncio.create_task(server.start_server())
+            await asyncio.sleep(0.1)
+            sock = server._DongleServer__server.sockets[0]
+            config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+            dongle = _BusyDropDongle(config["SERVER_MODE_PORT"])
+            dongle_task = asyncio.create_task(dongle.run())
+            await asyncio.sleep(0.3)
+
+            controller = mc.ModbusController()
+            controller.configure(config)
+            controller.set_server(server, asyncio.get_running_loop())
+            try:
+                await controller.read_items(["buzzer"])       # block 80
+                await controller.read_items(["eps_seamless"])  # block 0
+            finally:
+                dongle_task.cancel()
+                try:
+                    await dongle_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                server_task.cancel()
+                try:
+                    await server_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                await server.stop_server()
+            dropped = [r for r in dongle.reply_log if r[1] == "DROP"]
+            # The busiest possible sender must never collide with a busy dongle.
+            self.assertEqual(dropped, [])
+
+        await asyncio.wait_for(run_busy_dongle_case(), timeout=20)
+
+
+    async def test_read_recovers_from_partial_frame_desync(self):
+        """Regression: a truncated frame left over from a timeout used to stay
+        in the read buffer and shift the parse point for every later reply, so
+        even after the dongle recovered, polls and Modbus replies were read as
+        garbage for the life of the connection.  The server must discard the
+        stale incomplete frame on timeout (and resync implausible heads)."""
+
+        async def run_case() -> None:
+            config = {
+                "WORKING_MODE": "SERVER",
+                "DONGLE_SERIAL": DONGLE,
+                "INVERT_SERIAL": INV,
+                "SERVER_MODE_HOST": "127.0.0.1",
+                "SERVER_MODE_PORT": 0,
+                "SERVER_MODE_TIMEOUT": 5,
+                "SLEEP_TIME": 120,
+                "READ_INPUT_MODE": "INPUT1,INPUT3",
+                "READ_LOW_FREQ_INTERVAL": 60,
+            }
+            server = DongleServer(logging.getLogger("dongle.server"), config)
+            server_task = asyncio.create_task(server.start_server())
+            await asyncio.sleep(0.1)
+            sock = server._DongleServer__server.sockets[0]
+            config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+            dongle = _StalledPartialDongle(config["SERVER_MODE_PORT"])
+            dongle_task = asyncio.create_task(dongle.run())
+            await asyncio.sleep(0.3)
+
+            controller = mc.ModbusController()
+            controller.configure(config)
+            controller.set_server(server, asyncio.get_running_loop())
+            try:
+                # If stale bytes were never cleared, later frames are misaligned
+                # and the matching modbus reply is never parsed → TimeoutError.
+                values = await controller.read_items(["buzzer"])
+            finally:
+                dongle_task.cancel()
+                try:
+                    await dongle_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                server_task.cancel()
+                try:
+                    await server_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                await server.stop_server()
+            self.assertTrue(dongle.partial_sent)
+            self.assertEqual(values["buzzer"], 0)
+
+        await asyncio.wait_for(run_case(), timeout=20)
+
+
+    async def test_read_retries_dropped_idempotent_request(self):
+        """Regression: a dongle that silently drops one fc03 request (no reply)
+        used to fail the whole block read after 6s.  Idempotent reads (0x03/0x04)
+        are re-sent once within the same timeout budget, so a single dropped
+        request recovers in the same window."""
+
+        async def run_case() -> None:
+            config = {
+                "WORKING_MODE": "SERVER",
+                "DONGLE_SERIAL": DONGLE,
+                "INVERT_SERIAL": INV,
+                "SERVER_MODE_HOST": "127.0.0.1",
+                "SERVER_MODE_PORT": 0,
+                "SERVER_MODE_TIMEOUT": 5,
+                "SLEEP_TIME": 120,
+                "READ_INPUT_MODE": "INPUT1,INPUT3",
+                "READ_LOW_FREQ_INTERVAL": 60,
+            }
+            server = DongleServer(logging.getLogger("dongle.server"), config)
+            server_task = asyncio.create_task(server.start_server())
+            await asyncio.sleep(0.1)
+            sock = server._DongleServer__server.sockets[0]
+            config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+            dongle = _FirstDropDongle(config["SERVER_MODE_PORT"])
+            dongle_task = asyncio.create_task(dongle.run())
+            await asyncio.sleep(0.3)
+
+            controller = mc.ModbusController()
+            controller.configure(config)
+            controller.set_server(server, asyncio.get_running_loop())
+            try:
+                values = await controller.read_items(["buzzer"])
+            finally:
+                dongle_task.cancel()
+                try:
+                    await dongle_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                server_task.cancel()
+                try:
+                    await server_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                await server.stop_server()
+            # The first fc03 was dropped; the retry succeeded.
+            self.assertEqual(dongle.fc03_seen, 2)
+            self.assertEqual(values["buzzer"], 0)
+
+        await asyncio.wait_for(run_case(), timeout=20)
+
+
+class _BusyDropDongle:
+    """A dongle that works like the real one: each command has a reply latency
+    and any command arriving while the previous one is still processing is
+    silently dropped (no reply is ever sent for it)."""
+
+    REPLY_LATENCY = 0.6
+
+    def __init__(self, port: int):
+        self.port = port
+        self.reply_log = []
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        busy_until = 0.0
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    ts = loop.time() - t0
+                    if ts < busy_until:
+                        # Still processing the previous command: drop silently.
+                        self.reply_log.append((ts, "DROP", fn, reg))
+                        continue
+                    self.reply_log.append((ts, "recv", fn, reg))
+                    busy_until = ts + self.REPLY_LATENCY
+                    await asyncio.sleep(self.REPLY_LATENCY)
+                    if fn == m.FN_READ_HOLDING:
+                        vals = b"".join(
+                            int(reg + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_holding_reply(reg, vals))
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_input_reply(reg, vals))
+                    await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+class _StalledPartialDongle:
+    """On the first command it starts a reply but stalls mid-frame: it sends
+    only a header that claims a 117-byte frame, then goes silent.  Afterwards
+    it answers normally.  Models a real dongle dropping a truncated reply into
+    the connection."""
+
+    def __init__(self, port: int):
+        self.port = port
+        self.partial_sent = False
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    if not self.partial_sent:
+                        self.partial_sent = True
+                        header = (
+                            b"\x00" * 4
+                            + bytes([117 - m._FRAME_LENGTH_ADJUST, 0])
+                            + b"\x00" * 2
+                        )
+                        writer.write(header)
+                        await writer.drain()
+                        continue  # swallow this command; answer future ones
+                    if fn == m.FN_READ_HOLDING:
+                        vals = b"".join(
+                            int(reg + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_holding_reply(reg, vals))
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_input_reply(reg, vals))
+                    await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+class _FirstDropDongle:
+    """Answers every request except the very first fc03, which is silently
+    dropped (no reply).  Models a dongle discarding a single Modbus read."""
+
+    def __init__(self, port: int):
+        self.port = port
+        self.fc03_seen = 0
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    if fn == m.FN_READ_HOLDING:
+                        self.fc03_seen += 1
+                        if self.fc03_seen == 1:
+                            continue  # silently drop the first read
+                        vals = b"".join(
+                            int(reg + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_holding_reply(reg, vals))
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_input_reply(reg, vals))
+                    await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+class _MultiSerialFakeDongle:
+    """A dongle with its own identity: replies carry its dongle_serial and
+    inverter_serial.  Holding values are shifted by ``value_shift`` so a test
+    can tell which connection actually served a Modbus read."""
+
+    def __init__(self, port: int, dongle_serial: str, inverter_serial: str, value_shift: int = 0):
+        self.port = port
+        self.dongle_serial = dongle_serial
+        self.inverter_serial = inverter_serial
+        self.value_shift = value_shift
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    if fn == m.FN_READ_HOLDING:
+                        vals = b"".join(
+                            int(reg + i + self.value_shift).to_bytes(2, "little")
+                            for i in range(40)
+                        )
+                        writer.write(
+                            _holding_reply_serial(
+                                self.dongle_serial, self.inverter_serial, reg, vals
+                            )
+                        )
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i + self.value_shift).to_bytes(2, "little")
+                            for i in range(40)
+                        )
+                        writer.write(
+                            _input_reply_serial(
+                                self.dongle_serial, self.inverter_serial, reg, vals
+                            )
+                        )
+                    await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
+class TestServerMultiConnectionRouting(unittest.IsolatedAsyncioTestCase):
+    """Regression: with more than one dongle connected, a Modbus exchange must
+    be routed to the connection of the requested dongle_serial, and an
+    ambiguous read (no dongle_serial) must fail fast instead of guessing."""
+
+    DONGLE_A = "AAAAAAAAAA"
+    DONGLE_B = "BBBBBBBBBB"
+    INV_A = "AABBCCDDEE"
+    INV_B = "FFGGHHIIJJ"
+    PLACEHOLDER = "0000000000"  # config serial; rewired from parsed identity
+
+    async def _start_server(self):
+        config = {
+            "WORKING_MODE": "SERVER",
+            "DONGLE_SERIAL": self.PLACEHOLDER,
+            "INVERT_SERIAL": "",
+            "SERVER_MODE_HOST": "127.0.0.1",
+            "SERVER_MODE_PORT": 0,
+            "SERVER_MODE_TIMEOUT": 5,
+            "SLEEP_TIME": 120,
+            "READ_INPUT_MODE": "INPUT1,INPUT3",
+            "READ_LOW_FREQ_INTERVAL": 60,
+        }
+        server = DongleServer(logging.getLogger("dongle.server.multi"), config)
+        server_task = asyncio.create_task(server.start_server())
+        await asyncio.sleep(0.1)
+        sock = server._DongleServer__server.sockets[0]
+        config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+        controller = mc.ModbusController()
+        controller.configure(config)
+        controller.set_server(server, asyncio.get_running_loop())
+        return server, server_task, config, controller
+
+    @staticmethod
+    async def _wait_for_registry(server, serials: set, timeout: float = 10.0):
+        conns = server._DongleServer__connections
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if serials.issubset(conns):
+                return
+            await asyncio.sleep(0.05)
+        raise AssertionError("registry never reached serials=%s; has=%s" % (serials, sorted(conns)))
+
+    async def _stop(self, server_task, dongle_tasks, server):
+        for t in dongle_tasks:
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        server_task.cancel()
+        try:
+            await server_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await server.stop_server()
+
+    async def test_reads_route_to_requested_dongle(self):
+        server, server_task, config, controller = await self._start_server()
+        dongle_a = _MultiSerialFakeDongle(
+            config["SERVER_MODE_PORT"], self.DONGLE_A, self.INV_A, value_shift=0
+        )
+        dongle_b = _MultiSerialFakeDongle(
+            config["SERVER_MODE_PORT"], self.DONGLE_B, self.INV_B, value_shift=1000
+        )
+        task_a = asyncio.create_task(dongle_a.run())
+        task_b = asyncio.create_task(dongle_b.run())
+
+        conns = server._DongleServer__connections
+        try:
+            await self._wait_for_registry(server, {self.DONGLE_A, self.DONGLE_B})
+
+            # Ambiguous: two dongles, no dongle_serial.
+            self.assertIsNone(conns.get(self.PLACEHOLDER))
+            self.assertIsNone(server.connection_serials())
+            with self.assertRaises(m.ModbusError) as cm:
+                await controller.read_items(["warning_voltage"])
+            self.assertIn("Multiple dongle connections", str(cm.exception))
+
+            # Unknown serial must fail with a clear message.
+            with self.assertRaises(m.ModbusError) as cm:
+                await controller.read_items(["warning_voltage"], dongle_serial="ZZZZZZZZZZ")
+            self.assertIn("ZZZZZZZZZZ", str(cm.exception))
+
+            # Same holding register differentiates the target connection.
+            a = await controller.read_items(["warning_voltage"], dongle_serial=self.DONGLE_A)
+            b = await controller.read_items(["warning_voltage"], dongle_serial=self.DONGLE_B)
+            self.assertEqual(a["warning_voltage"], 16.2)
+            self.assertEqual(b["warning_voltage"], 116.2)
+        finally:
+            await self._stop(server_task, (task_a, task_b), server)
+
+
+if __name__ == "__main__":
+    unittest.main()
