@@ -148,20 +148,23 @@
 }
 
 .triggers-dashboard-btn {
-    background: none;
     border: none;
-    cursor: pointer;
-    font-size: 16px;
     padding: 5px;
-    color: inherit;
+    cursor: pointer;
+    background-color: transparent;
+    color: green;
 }
 
 .triggers-dashboard-btn svg {
     vertical-align: middle;
 }
 
-.triggers-dashboard-btn:hover {
-    background-color: #f0f0f0; /* Light mode hover background, matching gear settings icon */
+.triggers-dashboard-btn.active {
+    background-color: lightgray;
+}
+
+.triggers-dashboard-btn:not(.active):hover {
+    background-color: #f0f0f0; /* Light mode hover background, matching gear/notification icons */
 }
 
 .settings-popover .settings-message {
@@ -221,7 +224,10 @@
     .settings-popover .setting-description {
         color: var(--ui-muted);
     }
-    .triggers-dashboard-btn:hover {
-        background-color: #666; /* Dark mode hover background, matching gear settings icon */
+    .triggers-dashboard-btn.active {
+        background-color: #555;
+    }
+    .triggers-dashboard-btn:not(.active):hover {
+        background-color: #666; /* Dark mode hover background, matching gear/notification icons */
     }
 }
