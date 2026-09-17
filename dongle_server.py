@@ -26,6 +26,22 @@ class DongleServer:
         self.__cached_data: dict = {}
         self.__modbus_pending: list = []
         self.__modbus_wake = asyncio.Event()
+        # The real dongle services one command at a time and silently drops any
+        # command that arrives while it is still busy with the previous one
+        # (~0.6s of processing per command).  Keep every dongle write spaced by
+        # at least this gap so a Modbus request is never dropped because the
+        # poll loop fired it too soon after a ReadInput request.
+        self.__last_dongle_send = 0.0
+        self.__dongle_command_gap = float(config.get("DONGLE_COMMAND_GAP", 0.8))
+
+    async def __write_dongle_command(self, writer: asyncio.StreamWriter, raw: bytes) -> None:
+        loop = asyncio.get_running_loop()
+        elapsed = loop.time() - self.__last_dongle_send
+        if elapsed < self.__dongle_command_gap:
+            await asyncio.sleep(self.__dongle_command_gap - elapsed)
+        writer.write(raw)
+        await writer.drain()
+        self.__last_dongle_send = loop.time()
 
     async def request_modbus(self, frame: bytes, expected_fn: int, timeout: float = 6.0, return_raw: bool = False):
         """Send a Modbus request on the active dongle connection (if any).
@@ -72,11 +88,7 @@ class DongleServer:
         for item in self.__modbus_pending:
             if not item.get("sent"):
                 item["sent"] = True
-                writer.write(item["frame"])
-                try:
-                    await writer.drain()
-                except Exception:
-                    pass
+                await self.__write_dongle_command(writer, item["frame"])
                 self.__logger.debug("Sent Modbus request (fn=0x%02x) to dongle", item["fn"])
                 return True
         return False
@@ -144,6 +156,10 @@ class DongleServer:
             if frame is not None:
                 return list(frame)
             self.__modbus_wake.clear()
+            # A Modbus request queued *before* the wake was cleared must not be
+            # lost: return immediately so the loop top sends it right away.
+            if self.__has_unsent_modbus():
+                return []
             read_task = asyncio.ensure_future(reader.read(1024))
             wake_task = asyncio.ensure_future(self.__modbus_wake.wait())
             try:
@@ -177,6 +193,9 @@ class DongleServer:
 
     async def __interruptible_sleep(self, seconds: float) -> None:
         self.__modbus_wake.clear()
+        # A Modbus request queued before the wake was cleared must not be lost.
+        if self.__has_unsent_modbus():
+            return
         try:
             await asyncio.wait_for(self.__modbus_wake.wait(), timeout=seconds)
         except asyncio.TimeoutError:
@@ -259,8 +278,7 @@ class DongleServer:
                 # Send ReadInput request immediately when dongle connects
                 current_register = get_next_register()
                 request = build_poll_request(current_register)
-                writer.write(request)
-                await writer.drain()
+                await self.__write_dongle_command(writer, request)
                 self.__logger.debug(
                     "Sent ReadInput request (register=%s, protocol 1) to %s immediately",
                     current_register,
@@ -320,8 +338,7 @@ class DongleServer:
                             if dongle_serial and inverter_serial:
                                 current_register = get_next_register()
                                 request = build_poll_request(current_register)
-                                writer.write(request)
-                                await writer.drain()
+                                await self.__write_dongle_command(writer, request)
                                 self.__logger.debug(
                                     "Sent ReadInput request (register=%s) to %s after modbus",
                                     current_register,
@@ -387,8 +404,7 @@ class DongleServer:
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
                         request = build_poll_request(current_register)
-                        writer.write(request)
-                        await writer.drain()
+                        await self.__write_dongle_command(writer, request)
                         self.__logger.debug(
                             "Sent ReadInput request (register=%s) to %s",
                             current_register,
@@ -414,8 +430,7 @@ class DongleServer:
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
                         request = build_poll_request(current_register)
-                        writer.write(request)
-                        await writer.drain()
+                        await self.__write_dongle_command(writer, request)
                         self.__logger.debug(
                             "Resent ReadInput request (register=%s) to %s after timeout",
                             current_register,

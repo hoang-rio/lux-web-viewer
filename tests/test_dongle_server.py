@@ -148,6 +148,117 @@ class TestServerModeReadInterleave(unittest.IsolatedAsyncioTestCase):
             self._run_dongle_and_read(sleep_time=1), timeout=20
         )
 
+    async def test_read_does_not_drop_commands_on_busy_dongle(self):
+        """Regression: a real dongle processes one command at a time and
+        silently drops any command that arrives while it is busy (~0.6s).
+        The server used to fire the "after modbus" poll and the next queued
+        Modbus request ~8ms apart, so the Modbus request was dropped and the
+        read timed out after 6s.  Writes must be spaced by a minimum gap."""
+
+        async def run_busy_dongle_case() -> None:
+            config = {
+                "WORKING_MODE": "SERVER",
+                "DONGLE_SERIAL": DONGLE,
+                "INVERT_SERIAL": INV,
+                "SERVER_MODE_HOST": "127.0.0.1",
+                "SERVER_MODE_PORT": 0,
+                "SERVER_MODE_TIMEOUT": 5,
+                "SLEEP_TIME": 120,
+                "READ_INPUT_MODE": "INPUT1,INPUT3",
+                "READ_LOW_FREQ_INTERVAL": 60,
+            }
+            server = DongleServer(logging.getLogger("dongle.server"), config)
+            server_task = asyncio.create_task(server.start_server())
+            await asyncio.sleep(0.1)
+            sock = server._DongleServer__server.sockets[0]
+            config["SERVER_MODE_PORT"] = sock.getsockname()[1]
+
+            dongle = _BusyDropDongle(config["SERVER_MODE_PORT"])
+            dongle_task = asyncio.create_task(dongle.run())
+            await asyncio.sleep(0.3)
+
+            controller = mc.ModbusController()
+            controller.configure(config)
+            controller.set_server(server, asyncio.get_running_loop())
+            try:
+                await controller.read_items(["buzzer"])       # block 80
+                await controller.read_items(["eps_seamless"])  # block 0
+            finally:
+                dongle_task.cancel()
+                try:
+                    await dongle_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                server_task.cancel()
+                try:
+                    await server_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                await server.stop_server()
+            dropped = [r for r in dongle.reply_log if r[1] == "DROP"]
+            # The busiest possible sender must never collide with a busy dongle.
+            self.assertEqual(dropped, [])
+
+        await asyncio.wait_for(run_busy_dongle_case(), timeout=20)
+
+
+class _BusyDropDongle:
+    """A dongle that works like the real one: each command has a reply latency
+    and any command arriving while the previous one is still processing is
+    silently dropped (no reply is ever sent for it)."""
+
+    REPLY_LATENCY = 0.6
+
+    def __init__(self, port: int):
+        self.port = port
+        self.reply_log = []
+
+    async def run(self):
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        buf = bytearray()
+        busy_until = 0.0
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(reader.read(1024), timeout=15)
+                except asyncio.TimeoutError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while len(buf) >= 8:
+                    total = m.to_int(buf[4:6]) + m._FRAME_LENGTH_ADJUST
+                    if total < 20 or total > 4096 or len(buf) < total:
+                        break
+                    frame = bytes(buf[:total])
+                    del buf[:total]
+                    fn = m.response_function(frame)
+                    reg = m.request_register(frame)
+                    ts = loop.time() - t0
+                    if ts < busy_until:
+                        # Still processing the previous command: drop silently.
+                        self.reply_log.append((ts, "DROP", fn, reg))
+                        continue
+                    self.reply_log.append((ts, "recv", fn, reg))
+                    busy_until = ts + self.REPLY_LATENCY
+                    await asyncio.sleep(self.REPLY_LATENCY)
+                    if fn == m.FN_READ_HOLDING:
+                        vals = b"".join(
+                            int(reg + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_holding_reply(reg, vals))
+                    elif fn == m.FN_READ_INPUT:
+                        vals = b"".join(
+                            int(100 + i).to_bytes(2, "little") for i in range(40)
+                        )
+                        writer.write(_input_reply(reg, vals))
+                    await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
 
 if __name__ == "__main__":
     unittest.main()
