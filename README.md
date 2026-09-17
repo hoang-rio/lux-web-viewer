@@ -80,6 +80,23 @@ Each trigger follows a **When → Conditions → Action** model:
 
 > **Note**: Tuya devices must be on the same local network. The app uses `tinytuya` for direct local device control — no cloud API required.
 
+## Modbus Register Read/Write
+The app can read and write inverter registers over the Modbus protocol through the existing dongle connection (SERVER mode) — no extra hardware or configuration is required. Modbus requests are seamlessly interleaved with the normal ReadInput polling so real-time monitoring keeps running.
+
+### Features
+* Read/write Modbus registers (fc 3/4 read, fc 6/16 write) via the dongle
+* ~60 settings grouped into categories: Beep/Audio, Application, Charge, Discharge, Battery
+* Admin dashboard (Settings → Modbus) to browse, read, and apply register values
+* Reading works with both the built-in dongle and modbus-controller (client mode)
+
+### REST APIs (admin-gated)
+* `GET /modbus/status` — controller status
+* `GET /modbus/registers` — register catalog grouped by category
+* `GET /modbus/read?category=<key>` — read current values (omit `category` to read all)
+* `POST /modbus/write` with JSON `{ "key": <register key>, "value": <new value> }` to write a register
+
+Access is restricted to clients within `ADMIN_ALLOWED_CIDR`.
+
 <center>
 <picture style="max-width: 800px">
     <source srcset="misc/screenshot-light.png" media="(prefers-color-scheme: light)"/>

@@ -80,6 +80,23 @@ Mỗi quy tắc kích hoạt theo mô hình **Khi → Điều kiện → Hành �
 
 > **Lưu ý**: Thiết bị Tuya phải nằm trên cùng mạng cục bộ. Ứng dụng sử dụng `tinytuya` để điều khiển trực tiếp thiết bị — không cần API đám mây.
 
+## Đọc/Ghi register Modbus
+Ứng dụng có thể đọc và ghi register biến tần qua giao thức Modbus sử dụng chính kết nối dongle hiện có (chế độ SERVER) — không cần phần cứng hay cấu hình bổ sung. Các yêu cầu Modbus được xen kẽ liền mạch với chu kỳ poll ReadInput nên việc giám sát thời gian thực vẫn chạy bình thường.
+
+### Tính năng
+* Đọc/ghi register Modbus (fc 3/4 đọc, fc 6/16 ghi) qua dongle
+* ~60 cài đặt chia theo nhóm: Beep/Audio, Application, Sạc, Xả, Pin
+* Bảng điều khiển quản trị (Cài đặt → Modbus) để duyệt, đọc và áp dụng giá trị register
+* Hoạt động được với cả dongle tích hợp lẫn modbus-controller (chế độ client)
+
+### REST API (chỉ quản trị viên)
+* `GET /modbus/status` — trạng thái controller
+* `GET /modbus/registers` — danh mục register nhóm theo loại
+* `GET /modbus/read?category=<key>` — đọc giá trị hiện tại (bỏ qua `category` để đọc tất cả)
+* `POST /modbus/write` với JSON `{ "key": <mã register>, "value": <giá trị mới> }` để ghi register
+
+Quyền truy cập bị giới hạn cho các máy nằm trong `ADMIN_ALLOWED_CIDR`.
+
 <center>
 <picture style="max-width: 800px">
     <source srcset="misc/screenshot-light-vi.png" media="(prefers-color-scheme: light)"/>
