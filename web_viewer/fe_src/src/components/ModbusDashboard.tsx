@@ -246,7 +246,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
                 const value = itemKind(item) === 'time' ? draft : Number(draft);
                 applyWrite(item, value, item.danger);
               }}
-              disabled={!status?.available || savingKey !== null || !editable || (drafts[item.key] === undefined)}
+              disabled={!status?.available || savingKey !== null || readState !== 'success' || (drafts[item.key] === undefined)}
             >
               {savingKey === item.key ? t('modbus.saving') : t('modbus.apply')}
             </button>
