@@ -737,11 +737,6 @@ async def basic_auth_middleware(request, handler):
 
 # --- Modbus Routes ---
 
-def _modbus_language(request: web.Request) -> str:
-    lang = request.query.get("lang", "en")
-    return "vi" if lang.lower().startswith("vi") else "en"
-
-
 async def modbus_status(request: web.Request):
     try:
         return web.json_response(modbus_controller.controller.status)
@@ -752,11 +747,10 @@ async def modbus_status(request: web.Request):
 
 async def modbus_registers_route(request: web.Request):
     try:
-        lang = _modbus_language(request)
         categories = []
         for category in modbus_registers.categories():
             items = [
-                modbus_registers.public_item(item, lang)
+                modbus_registers.public_item(item)
                 for item in modbus_registers.get_items(category["key"])
             ]
             categories.append({
@@ -766,7 +760,6 @@ async def modbus_registers_route(request: web.Request):
         return web.json_response({
             "categories": categories,
             "status": modbus_controller.controller.status,
-            "language": lang,
         })
     except Exception as e:
         logger.error("Error in modbus_registers: %s", e)

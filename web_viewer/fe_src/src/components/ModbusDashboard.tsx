@@ -35,7 +35,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     setValues({});
     setMessage(null);
     try {
-      const regsRes = await fetch(`${apiBase}/modbus/registers?lang=${i18n.language}`);
+      const regsRes = await fetch(`${apiBase}/modbus/registers`);
       if (!regsRes.ok) {
         setNoAccess(true);
         return;

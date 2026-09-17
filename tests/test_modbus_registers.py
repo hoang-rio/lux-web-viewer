@@ -165,7 +165,7 @@ class TestEncode(unittest.TestCase):
 class TestPublicItem(unittest.TestCase):
     def test_full_register_item(self):
         item = m.get_item("grid_export_percent")
-        pub = m.public_item(item, "en")
+        pub = m.public_item(item)
         self.assertEqual(pub["key"], "grid_export_percent")
         self.assertEqual(pub["kind"], "number")
         self.assertTrue(pub["danger"])
@@ -174,17 +174,16 @@ class TestPublicItem(unittest.TestCase):
 
     def test_bitfield_item(self):
         item = m.get_item("ac_charge_type")
-        pub = m.public_item(item, "vi")
+        pub = m.public_item(item)
         self.assertIn("bit0", pub)
         self.assertTrue(pub["options"])
-        # Vietnamese labels
-        # New FE-only contract: the payload option carries NO per-language label
+        # FE-only contract: the payload option carries NO per-language label
         # (text lives in the FE locale mirror modbus.opt.<regKey>.<value>).
         self.assertTrue(all(o.keys() <= {"value"} for o in pub["options"]))
         self.assertTrue(all(opt["value"] == opt["value"] for opt in pub["options"]))
 
     def test_time_item(self):
-        pub = m.public_item(m.get_item("ac_charge_time_1_start"), "en")
+        pub = m.public_item(m.get_item("ac_charge_time_1_start"))
         self.assertEqual(pub["kind"], "time")
         self.assertNotIn("options", pub)
 
@@ -192,9 +191,9 @@ class TestPublicItem(unittest.TestCase):
         """FE locale = sole per-language text source. The register payload carries NO
         per-language name; the bilingual wording lives in the FE locale mirror only."""
         item = m.get_item("buzzer")
-        pub = m.public_item(item, "en")
+        pub = m.public_item(item)
         self.assertNotIn("name", pub)
-        asrt = m.public_item(item, "vi")
+        asrt = m.public_item(item)
         self.assertNotIn("name", asrt)
 
 
