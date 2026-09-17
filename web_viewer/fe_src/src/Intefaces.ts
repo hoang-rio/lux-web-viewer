@@ -106,3 +106,36 @@ export interface IUserInverter {
   last_communication_at?: string | null;
   is_online?: boolean;
 }
+
+export interface IModbusOption {
+  value: number;
+  label: string;
+}
+
+export interface IModbusItem {
+  key: string;
+  name: string;
+  reg: number;
+  kind: 'toggle' | 'select' | 'number' | 'time';
+  danger: boolean;
+  verify: boolean;
+  bit?: number;
+  bit0?: number;
+  bitwidth?: number;
+  unit?: string;
+  min?: number;
+  max?: number;
+  scale?: number;
+  options?: IModbusOption[];
+}
+
+export interface IModbusCategory {
+  key: string;
+  name: string;
+  items: IModbusItem[];
+}
+
+export interface IModbusStatus {
+  mode: string;
+  available: boolean;
+}
