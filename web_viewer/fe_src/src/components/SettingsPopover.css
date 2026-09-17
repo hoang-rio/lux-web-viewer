@@ -136,6 +136,36 @@
     margin-right: 16px;
 }
 
+.settings-popover .settings-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 24px;
+}
+
+.settings-popover .settings-header-actions .triggers-dashboard-btn {
+    margin-right: 0;
+}
+
+.triggers-dashboard-btn {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    color: #333;
+}
+
+.triggers-dashboard-btn svg {
+    vertical-align: middle;
+}
+
+.triggers-dashboard-btn:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
 .settings-popover .settings-message {
     position: absolute;
     left: 50%;
@@ -192,5 +222,13 @@
     }
     .settings-popover .setting-description {
         color: var(--ui-muted);
+    }
+    .triggers-dashboard-btn {
+        color: var(--ui-muted);
+        border-color: var(--ui-border);
+    }
+    .triggers-dashboard-btn:hover {
+        background: color-mix(in srgb, var(--ui-surface-soft) 50%, transparent);
+        border-color: var(--ui-text);
     }
 }
