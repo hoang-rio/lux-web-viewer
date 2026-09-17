@@ -20,6 +20,7 @@ import jwt as pyjwt
 from api_storage import read_grid_state, register_device_token
 from web_viewer.routes_auth import AUTH_ROUTES
 from web_viewer.routes_inverters import INVERTER_ROUTES
+from web_viewer.routes_modbus import MODBUS_ROUTES
 from multi_tenant.auth import decode_access_token
 from multi_tenant.db import get_db_session
 from multi_tenant import repository as mt_repo
@@ -1210,6 +1211,11 @@ async def basic_auth_middleware(request, handler):
     resp = _deny_if_not_allowed_cidr(request, "/settings", allowed_methods=("OPTIONS",), web_only=False)
     if resp:
         return resp
+    # Modbus endpoints are admin-sensitive; restrict to trusted networks unless
+    # already cleared by Basic auth bypass.
+    resp = _deny_if_not_allowed_cidr(request, "/modbus", allowed_methods=("OPTIONS",), web_only=False)
+    if resp:
+        return resp
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Basic "):
@@ -1246,6 +1252,7 @@ def create_runner():
         web.post("/settings", update_settings),
         *AUTH_ROUTES,
         *INVERTER_ROUTES,
+        *MODBUS_ROUTES,
         web.static("/", path.join(path.dirname(__file__), "build"))
     ])
     return web.AppRunner(app, access_log=None)

@@ -755,6 +755,248 @@ paths:
                   error:
                     type: string
 
+  /modbus/status:
+    get:
+      operationId: getModbusStatus
+      tags: [Modbus]
+      summary: Get Modbus availability for the current run mode
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Modbus controller status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModbusStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /modbus/registers:
+    get:
+      operationId: getModbusRegisters
+      tags: [Modbus]
+      summary: Get the register catalog grouped by category
+      description: Returns categories (beep, application, charge, discharge, battery) with their items.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+            enum: [en, vi]
+          description: Response language (en or vi)
+      responses:
+        "200":
+          description: Register catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModbusCategory"
+                  status:
+                    $ref: "#/components/schemas/ModbusStatus"
+        "500":
+          description: Catalog error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    maxItems: 0
+                  message:
+                    type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /modbus/read:
+    get:
+      operationId: readModbusRegisters
+      tags: [Modbus]
+      summary: Read current register values
+      description: Reads a category (e.g. charge), an explicit comma-separated key list, or the whole catalog when neither is given. Values are returned in wire format (number for toggle/number, option value for select, HH:MM for time). In multi-tenant mode the request targets the logged-in user's inverter (first one by default, or the one selected via inverter_id / dongle_serial).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Category key to read (beep, application, charge, discharge, battery)
+        - name: keys
+          in: query
+          schema:
+            type: string
+          description: Comma-separated register keys to read
+        - name: inverter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Multi-tenant inverter to read (defaults to the user's first inverter)
+        - name: dongle_serial
+          in: query
+          schema:
+            type: string
+          description: Target dongle serial; validated against the logged-in user's inverters in multi-tenant mode
+      responses:
+        "200":
+          description: Read values
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: true
+                  values:
+                    type: object
+                    additionalProperties: {}
+                    description: Register key to display value mapping
+                  status:
+                    $ref: "#/components/schemas/ModbusStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "503":
+          description: Modbus not available in the current mode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: false
+                  message:
+                    type: string
+                  status:
+                    $ref: "#/components/schemas/ModbusStatus"
+        "500":
+          description: Read error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: false
+                  message:
+                    type: string
+
+  /modbus/write:
+    post:
+      operationId: writeModbusRegister
+      tags: [Modbus]
+      summary: Write a register value
+      description: Writes a single register and returns the resulting display value. Danger items require confirm=true. Select values must be an allowed option value. In multi-tenant mode the write targets the logged-in user's inverter (first one by default, or the one selected via inverter_id / dongle_serial in the body).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  description: Register key from /modbus/registers
+                value:
+                  description: Display value (1/0 for toggle, allowed option for select, number for number, HH:MM for time)
+                confirm:
+                  type: boolean
+                  default: false
+                  description: Must be true to write a danger item
+                inverter_id:
+                  type: string
+                  format: uuid
+                  description: Multi-tenant inverter to write (defaults to the user's first inverter)
+                dongle_serial:
+                  type: string
+                  description: Target dongle serial; validated against the logged-in user's inverters in multi-tenant mode
+      responses:
+        "200":
+          description: Write result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: true
+                  key:
+                    type: string
+                  value:
+                    description: New display value after the write
+        "400":
+          description: Unknown key or rejected write (confirmation required, invalid option, out of range)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: false
+                  message:
+                    type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "503":
+          description: Modbus not available in the current mode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: false
+                  message:
+                    type: string
+                  status:
+                    $ref: "#/components/schemas/ModbusStatus"
+        "500":
+          description: Write error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    default: false
+                  message:
+                    type: string
+
 components:
   securitySchemes:
     BearerAuth:
@@ -774,6 +1016,78 @@ components:
           format: email
         email_confirmed:
           type: boolean
+
+    ModbusStatus:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [dongle, server, http]
+          description: Modbus transport mode for the current run mode
+        available:
+          type: boolean
+          description: Whether Modbus reads/writes are usable right now
+
+    ModbusOption:
+      type: object
+      properties:
+        value:
+          type: integer
+        label:
+          type: string
+
+    ModbusItem:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        reg:
+          type: integer
+          description: Register address
+        kind:
+          type: string
+          enum: [toggle, select, number, time]
+        danger:
+          type: boolean
+          description: True when writing requires confirm=true
+        verify:
+          type: boolean
+          description: True when the write value is verified by re-reading the register
+        bit:
+          type: integer
+          description: Single bit position for toggle items in a shared register
+        bit0:
+          type: integer
+          description: First bit position for select items packed in a shared register
+        bitwidth:
+          type: integer
+          description: Bit width for packed select items
+        unit:
+          type: string
+        min:
+          type: number
+        max:
+          type: number
+        scale:
+          type: number
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModbusOption"
+
+    ModbusCategory:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModbusItem"
 
     Inverter:
       type: object
