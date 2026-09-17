@@ -13,6 +13,7 @@ import * as logUtil from "../utils/logUtil";
 
 const SettingsPopover = lazy(() => import("./SettingsPopover"));
 const TriggerDashboard = lazy(() => import("./TriggerDashboard"));
+const ModbusDashboard = lazy(() => import("./ModbusDashboard"));
 
 interface Props {
   inverterData: IInverterData;
@@ -37,6 +38,7 @@ function SystemInformation({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showTriggerDashboard, setShowTriggerDashboard] = useState(false);
+  const [showModbus, setShowModbus] = useState(false);
   const [allowAdmin, setAllowAdmin] = useState<boolean>(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const notificationButtonRef = useRef<HTMLDivElement>(null);
@@ -439,7 +441,7 @@ function SystemInformation({
               </div>
             </div>
           }>
-            <SettingsPopover ref={settingsPopoverRef} allowAdmin={allowAdmin} onClose={() => setShowSettings(false)} onOpenTriggers={() => { setShowSettings(false); setShowTriggerDashboard(true); }} />
+            <SettingsPopover ref={settingsPopoverRef} allowAdmin={allowAdmin} onClose={() => setShowSettings(false)} onOpenTriggers={() => { setShowSettings(false); setShowTriggerDashboard(true); }} onOpenModbus={() => { setShowSettings(false); setShowModbus(true); }} />
           </Suspense>
         )}
         {showTriggerDashboard && (
@@ -451,6 +453,17 @@ function SystemInformation({
             </div>
           }>
             <TriggerDashboard onClose={() => setShowTriggerDashboard(false)} />
+          </Suspense>
+        )}
+        {showModbus && (
+          <Suspense fallback={
+            <div className="modbus-dashboard-overlay">
+              <div className="modbus-dashboard">
+                <Loading />
+              </div>
+            </div>
+          }>
+            <ModbusDashboard onClose={() => setShowModbus(false)} />
           </Suspense>
         )}
       </div>

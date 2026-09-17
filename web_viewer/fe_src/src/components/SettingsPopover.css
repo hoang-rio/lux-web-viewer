@@ -157,6 +157,17 @@
     margin-right: 16px;
 }
 
+.settings-popover .settings-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 24px;
+}
+
+.settings-popover .settings-header-actions .triggers-dashboard-btn {
+    margin-right: 0;
+}
+
 .settings-popover .settings-message {
     position: absolute;
     left: 50%;
@@ -181,8 +192,11 @@
     cursor: pointer;
     font-size: 16px;
     padding: 2px 6px;
-    margin-right: 24px;
     color: #333;
+}
+
+.triggers-dashboard-btn svg {
+    vertical-align: middle;
 }
 
 .triggers-dashboard-btn:hover {

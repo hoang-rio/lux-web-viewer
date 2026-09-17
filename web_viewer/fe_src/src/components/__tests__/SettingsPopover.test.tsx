@@ -30,7 +30,7 @@ describe('SettingsPopover no admin access', () => {
   });
 
   it('renders the no-permission message instead of the form when /settings returns 403', async () => {
-    render(<SettingsPopover allowAdmin onClose={() => {}} onOpenTriggers={() => {}} />);
+    render(<SettingsPopover allowAdmin onClose={() => {}} onOpenTriggers={() => {}} onOpenModbus={() => {}} />);
 
     expect(await screen.findByText('settings.noAdminPermission')).toBeInTheDocument();
     expect(screen.getByText('settings.noAdminPermissionHint')).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe('SettingsPopover no admin access', () => {
   });
 
   it('renders the no-permission message when allowAdmin is false', async () => {
-    render(<SettingsPopover allowAdmin={false} onClose={() => {}} onOpenTriggers={() => {}} />);
+    render(<SettingsPopover allowAdmin={false} onClose={() => {}} onOpenTriggers={() => {}} onOpenModbus={() => {}} />);
 
     expect(await screen.findByText('settings.noAdminPermission')).toBeInTheDocument();
     expect(screen.queryByText('settings.batterySection')).not.toBeInTheDocument();

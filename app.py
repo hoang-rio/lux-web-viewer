@@ -15,6 +15,7 @@ from web_socket_client import WebSocketClient
 import settings
 import database
 import trigger_engine
+import modbus_controller
 
 DONGLE_MODE = "DONGLE"
 SERVER_MODE = "SERVER"
@@ -287,6 +288,7 @@ async def main():
         fcm_service = FCM(logger, config)
         trigger_engine.set_fcm_service(fcm_service)
         trigger_engine.set_config(config)
+        modbus_controller.configure(config)
         global play_audio_thread
         trigger_engine.set_player(play_audio_thread)
         run_web_view = config["RUN_WEB_VIEWER"] == "True"
@@ -355,6 +357,7 @@ async def main():
             dongle_server = DongleServer(logger, config)
             # Start the server in a background task
             server_task = asyncio.create_task(dongle_server.start_server())
+            modbus_controller.set_server(dongle_server, asyncio.get_running_loop())
             logger.info("Waiting for dongle connections on port %s",
                         config.get("SERVER_MODE_PORT", 4346))
             while True:

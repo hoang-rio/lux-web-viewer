@@ -3,6 +3,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 import dongle_handler
+import modbus_service
+
+SERVER_REQUEST_FUNCTIONS = (0x03, 0x04, 0x06, 0x10)
 
 
 class DongleServer:
@@ -21,6 +24,160 @@ class DongleServer:
         self.__data_received_event = asyncio.Event()
         self.__read_count = 0
         self.__cached_data: dict = {}
+        self.__modbus_pending: list = []
+        self.__modbus_wake = asyncio.Event()
+
+    async def request_modbus(self, frame: bytes, expected_fn: int, timeout: float = 6.0, return_raw: bool = False):
+        """Send a Modbus request on the active dongle connection (if any).
+
+        The request is interleaved with the polling loop. Only a single Modbus
+        exchange is in flight at a time; callers are awaited until the matching
+        reply arrives (or ``timeout`` elapses). Returns the parsed response
+        value unless ``return_raw`` is set, in which case the raw reply frame
+        bytes are returned.
+        """
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        try:
+            register = modbus_service.request_register(frame)
+        except modbus_service.ModbusError:
+            register = None
+        entry = {
+            "frame": bytes(frame),
+            "fn": expected_fn,
+            "register": register,
+            "future": future,
+            "sent": False,
+            "return_raw": bool(return_raw),
+        }
+        self.__modbus_pending.append(entry)
+        self.__modbus_wake.set()
+        try:
+            return await asyncio.wait_for(asyncio.shield(future), timeout)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            for i, item in enumerate(self.__modbus_pending):
+                if item.get("future") is future:
+                    del self.__modbus_pending[i]
+                    break
+            raise
+
+    def __has_unsent_modbus(self) -> bool:
+        return any(not item.get("sent") for item in self.__modbus_pending)
+
+    async def __send_pending_modbus(self, writer: asyncio.StreamWriter) -> bool:
+        """Send the next queued Modbus request, if any. Returns True when sent."""
+        for item in self.__modbus_pending:
+            if not item.get("sent"):
+                item["sent"] = True
+                writer.write(item["frame"])
+                try:
+                    await writer.drain()
+                except Exception:
+                    pass
+                self.__logger.debug("Sent Modbus request (fn=0x%02x) to dongle", item["fn"])
+                return True
+        return False
+
+    def __resolve_modbus(self, raw_data) -> bool:
+        """Try to match raw data against a pending Modbus request; resolve on match."""
+        if not self.__modbus_pending:
+            return False
+        try:
+            if len(raw_data) < 20:
+                return False
+            fn = modbus_service.response_function(raw_data)
+            base_fn = fn & 0x7F
+            if base_fn not in SERVER_REQUEST_FUNCTIONS:
+                return False
+            register = modbus_service.response_register(raw_data)
+        except modbus_service.ModbusError:
+            return False
+
+        for i, item in enumerate(self.__modbus_pending):
+            if item["fn"] != base_fn:
+                continue
+            if item.get("register") is not None and item["register"] != register:
+                continue
+            entry = self.__modbus_pending.pop(i)
+            future = entry["future"]
+            if future.done():
+                return True
+            try:
+                if entry.get("return_raw"):
+                    future.set_result(raw_data)
+                else:
+                    value = modbus_service.parse_response(raw_data, base_fn)
+                    future.set_result(value)
+            except Exception as e:
+                future.set_exception(e)
+            return True
+        return False
+
+    def __pop_complete_frame(self, buffer: bytearray) -> Optional[bytes]:
+        """Pop one complete TCP frame from the read buffer, if available."""
+        if len(buffer) < 8:
+            return None
+        total = modbus_service.to_int(buffer[4:6]) + modbus_service._FRAME_LENGTH_ADJUST
+        if total < 20 or total > 4096:
+            return None
+        if len(buffer) < total:
+            return None
+        frame = bytes(buffer[:total])
+        del buffer[:total]
+        return frame
+
+    async def __read_with_wake(self, reader: asyncio.StreamReader, timeout: float, buffer: bytearray) -> Optional[list]:
+        """Read a complete frame from the dongle, aborting early on a Modbus wake.
+
+        ``buffer`` accumulates bytes across calls so that frames arriving
+        concatenated in a single TCP segment are still processed one at a time.
+
+        Returns a list of bytes when a complete frame is available, an empty
+        list when interrupted by a Modbus wake before a frame arrived, b"" when
+        the dongle disconnected, and None on a full timeout.
+        """
+        while True:
+            frame = self.__pop_complete_frame(buffer)
+            if frame is not None:
+                return list(frame)
+            self.__modbus_wake.clear()
+            read_task = asyncio.ensure_future(reader.read(1024))
+            wake_task = asyncio.ensure_future(self.__modbus_wake.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    {read_task, wake_task},
+                    timeout=timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                for task in (read_task, wake_task):
+                    if not task.done():
+                        task.cancel()
+                        try:
+                            await task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+            if read_task in done:
+                chunk = read_task.result()
+                if not chunk:
+                    return b""
+                buffer += chunk
+                frame = self.__pop_complete_frame(buffer)
+                if frame is not None:
+                    return list(frame)
+                timeout = min(timeout, 1.0) if timeout else 0.5
+                continue
+            if self.__has_unsent_modbus():
+                frame = self.__pop_complete_frame(buffer)
+                return list(frame) if frame is not None else []
+            return None
+
+    async def __interruptible_sleep(self, seconds: float) -> None:
+        self.__modbus_wake.clear()
+        try:
+            await asyncio.wait_for(self.__modbus_wake.wait(), timeout=seconds)
+        except asyncio.TimeoutError:
+            pass
 
     async def start_server(self):
         """Start the TCP server to listen for dongle connections."""
@@ -112,15 +269,27 @@ class DongleServer:
                     "DONGLE_SERIAL or INVERT_SERIAL not configured, "
                     "waiting for dongle to send data"
                 )
-            
+
+            read_buffer = bytearray()
+
             while True:
                 try:
-                    # Wait for data from dongle
-                    data = await asyncio.wait_for(
-                        reader.read(1024),
-                        timeout=int(self.__config.get("SERVER_MODE_TIMEOUT", 300))
-                    )
+                    # Send a queued Modbus request when dongle data is quiet, so its
+                    # reply is read back before the next ReadInput poll cycle.
+                    if await self.__send_pending_modbus(writer):
+                        data = await self.__read_with_wake(reader, 1.5, read_buffer)
+                    else:
+                        data = await self.__read_with_wake(
+                            reader,
+                            int(self.__config.get("SERVER_MODE_TIMEOUT", 300)),
+                            read_buffer,
+                        )
 
+                    if data == []:
+                        # Woken by a new Modbus request; loop again to send it.
+                        continue
+                    if data is None:
+                        raise asyncio.TimeoutError()
                     if not data:
                         self.__logger.info(
                             "Dongle disconnected from %s",
@@ -132,11 +301,29 @@ class DongleServer:
                         "Received %d bytes from %s (first 8: %s)",
                         len(data),
                         client_addr,
-                        data[:8].hex(),
+                        bytes(data[:8]).hex(),
                     )
 
                     # Parse the received data
                     raw_data = list(data)
+                    if self.__resolve_modbus(raw_data):
+                        # A Modbus reply was consumed; keep waiting for its data next.
+                        if not await self.__send_pending_modbus(writer):
+                            # Send next ReadInput request after a Modbus exchange
+                            if dongle_serial and inverter_serial:
+                                current_register = get_next_register()
+                                request = build_poll_request(current_register)
+                                writer.write(request)
+                                await writer.drain()
+                                self.__logger.debug(
+                                    "Sent ReadInput request (register=%s) to %s after modbus",
+                                    current_register,
+                                    client_addr,
+                                )
+                                advance_next_register()
+                            await self.__interruptible_sleep(sleep_time)
+                        continue
+
                     parsed_data = self.__parse_inverter_data(raw_data)
                     if parsed_data is not None:
                         self.__cached_data.update(parsed_data)
@@ -178,6 +365,10 @@ class DongleServer:
                                     registers = get_current_plan()
                                     next_register_idx = 0
 
+                    # Prefer sending queued Modbus requests over the next poll.
+                    if await self.__send_pending_modbus(writer):
+                        continue
+
                     # Send next ReadInput request after processing
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
@@ -190,9 +381,9 @@ class DongleServer:
                             client_addr,
                         )
                         advance_next_register()
-                    
-                    # Wait for next polling interval
-                    await asyncio.sleep(sleep_time)
+
+                    # Wait for next polling interval (interruptible by Modbus)
+                    await self.__interruptible_sleep(sleep_time)
 
                 except asyncio.TimeoutError:
                     self.__logger.warning(
@@ -200,6 +391,8 @@ class DongleServer:
                         client_addr
                     )
                     # Keep polling on timeout in case the previous response was dropped.
+                    if await self.__send_pending_modbus(writer):
+                        continue
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
                         request = build_poll_request(current_register)
@@ -211,7 +404,7 @@ class DongleServer:
                             client_addr,
                         )
                         advance_next_register()
-                    await asyncio.sleep(sleep_time)
+                    await self.__interruptible_sleep(sleep_time)
                 except Exception as e:
                     self.__logger.exception(
                         "Error handling data from %s: %s",
