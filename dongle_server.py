@@ -64,6 +64,9 @@ class DongleServer:
     def __has_unsent_modbus(self) -> bool:
         return any(not item.get("sent") for item in self.__modbus_pending)
 
+    def __has_inflight_modbus(self) -> bool:
+        return any(item.get("sent") for item in self.__modbus_pending)
+
     async def __send_pending_modbus(self, writer: asyncio.StreamWriter) -> bool:
         """Send the next queued Modbus request, if any. Returns True when sent."""
         for item in self.__modbus_pending:
@@ -275,8 +278,12 @@ class DongleServer:
             while True:
                 try:
                     # Send a queued Modbus request when dongle data is quiet, so its
-                    # reply is read back before the next ReadInput poll cycle.
-                    if await self.__send_pending_modbus(writer):
+                    # reply is read back before the next ReadInput poll cycle.  While a
+                    # Modbus request is queued or already in flight, keep the read window
+                    # short regardless of the poll timeout: the reply must be consumed
+                    # before the caller's own timeout, and interleaved ReadInput replies
+                    # must not delay it by a whole polling sleep.
+                    if await self.__send_pending_modbus(writer) or self.__has_inflight_modbus():
                         data = await self.__read_with_wake(reader, 1.5, read_buffer)
                     else:
                         data = await self.__read_with_wake(
@@ -369,6 +376,13 @@ class DongleServer:
                     if await self.__send_pending_modbus(writer):
                         continue
 
+                    # A Modbus reply is still in flight: keep draining frames
+                    # (short read window at the top of the loop) instead of
+                    # starting a new ReadInput poll + sleep cycle, so the reply
+                    # reaches its caller before their timeout expires.
+                    if self.__has_inflight_modbus():
+                        continue
+
                     # Send next ReadInput request after processing
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
@@ -392,6 +406,10 @@ class DongleServer:
                     )
                     # Keep polling on timeout in case the previous response was dropped.
                     if await self.__send_pending_modbus(writer):
+                        continue
+                    # A Modbus reply is in flight: loop again with the short read
+                    # window rather than dropping into a polling sleep.
+                    if self.__has_inflight_modbus():
                         continue
                     if dongle_serial and inverter_serial:
                         current_register = get_next_register()
