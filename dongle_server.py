@@ -6,6 +6,9 @@ import dongle_handler
 import modbus_service
 
 SERVER_REQUEST_FUNCTIONS = (0x03, 0x04, 0x06, 0x10)
+# Read function codes are idempotent, so a request that times out can be
+# re-sent once safely (writes 0x06/0x10 are not retried).
+IDEMPOTENT_READ_FUNCTIONS = (0x03, 0x04)
 
 
 class DongleServer:
@@ -51,6 +54,10 @@ class DongleServer:
         reply arrives (or ``timeout`` elapses). Returns the parsed response
         value unless ``return_raw`` is set, in which case the raw reply frame
         bytes are returned.
+
+        Read requests (0x03/0x04) are idempotent, so on a timeout the frame is
+        re-sent once within the same overall ``timeout`` window — a single
+        dropped request no longer fails a whole read.
         """
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -66,11 +73,38 @@ class DongleServer:
             "sent": False,
             "return_raw": bool(return_raw),
         }
+        retryable = expected_fn in IDEMPOTENT_READ_FUNCTIONS
+        attempt_timeout = timeout / 2 if retryable else timeout
         self.__modbus_pending.append(entry)
         self.__modbus_wake.set()
         try:
-            return await asyncio.wait_for(asyncio.shield(future), timeout)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+            return await asyncio.wait_for(asyncio.shield(future), attempt_timeout)
+        except asyncio.TimeoutError:
+            for i, item in enumerate(self.__modbus_pending):
+                if item.get("future") is future:
+                    del self.__modbus_pending[i]
+                    break
+            if not retryable:
+                raise
+            self.__logger.warning(
+                "Modbus fn=0x%02x reg=%s timed out; retrying once",
+                expected_fn,
+                register,
+            )
+            future = loop.create_future()
+            entry["future"] = future
+            entry["sent"] = False
+            self.__modbus_pending.append(entry)
+            self.__modbus_wake.set()
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), attempt_timeout)
+            except asyncio.TimeoutError:
+                for i, item in enumerate(self.__modbus_pending):
+                    if item.get("future") is future:
+                        del self.__modbus_pending[i]
+                        break
+                raise
+        except asyncio.CancelledError:
             for i, item in enumerate(self.__modbus_pending):
                 if item.get("future") is future:
                     del self.__modbus_pending[i]
@@ -141,6 +175,21 @@ class DongleServer:
         del buffer[:total]
         return frame
 
+    @staticmethod
+    def __resync_read_buffer(buffer: bytearray) -> None:
+        """Drop leading bytes that cannot start a valid LXP frame.
+
+        Mirrors the client-side resync (``modbus_controller``): a truncated
+        frame left behind by a timeout must never permanently shift the parse
+        point, or every later frame on the connection is read as garbage.
+        """
+        while len(buffer) >= 8:
+            total = modbus_service.to_int(buffer[4:6]) + modbus_service._FRAME_LENGTH_ADJUST
+            if total < 20 or total > 4096:
+                del buffer[0]
+                continue
+            break
+
     async def __read_with_wake(self, reader: asyncio.StreamReader, timeout: float, buffer: bytearray) -> Optional[list]:
         """Read a complete frame from the dongle, aborting early on a Modbus wake.
 
@@ -152,6 +201,7 @@ class DongleServer:
         the dongle disconnected, and None on a full timeout.
         """
         while True:
+            self.__resync_read_buffer(buffer)
             frame = self.__pop_complete_frame(buffer)
             if frame is not None:
                 return list(frame)
@@ -181,6 +231,7 @@ class DongleServer:
                 if not chunk:
                     return b""
                 buffer += chunk
+                self.__resync_read_buffer(buffer)
                 frame = self.__pop_complete_frame(buffer)
                 if frame is not None:
                     return list(frame)
@@ -189,6 +240,10 @@ class DongleServer:
             if self.__has_unsent_modbus():
                 frame = self.__pop_complete_frame(buffer)
                 return list(frame) if frame is not None else []
+            # Full timeout: any buffered bytes are a stale, incomplete frame the
+            # dongle has already moved on from. Discard them so the next
+            # complete frame parses cleanly for the rest of the connection.
+            buffer.clear()
             return None
 
     async def __interruptible_sleep(self, seconds: float) -> None:
