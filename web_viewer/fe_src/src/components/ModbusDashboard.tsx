@@ -12,7 +12,7 @@ interface ModbusDashboardProps {
 type DisplayValue = number | string | boolean | null;
 
 const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<IModbusCategory[]>([]);
   const [status, setStatus] = useState<IModbusStatus | null>(null);
   const [values, setValues] = useState<Record<string, DisplayValue>>({});
@@ -61,7 +61,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase, i18n.language, t]);
+  }, [apiBase, t]);
 
   useEffect(() => {
     fetchAll();
