@@ -60,11 +60,11 @@ _ITEMS = [
         "reg": 90,
         "kind": KIND_SELECT,
         "options": [
-            {"value": 208},
-            {"value": 220},
-            {"value": 230},
-            {"value": 240},
-            {"value": 277},
+            {"value": 208},  # 208 V
+            {"value": 220},  # 220 V
+            {"value": 230},  # 230 V
+            {"value": 240},  # 240 V
+            {"value": 277},  # 277 V
         ],
         "danger": True,
     },
@@ -74,8 +74,8 @@ _ITEMS = [
         "reg": 91,
         "kind": KIND_SELECT,
         "options": [
-            {"value": 50},
-            {"value": 60},
+            {"value": 50},  # 50 Hz
+            {"value": 60},  # 60 Hz
         ],
         "danger": True,
     },
@@ -155,9 +155,9 @@ _ITEMS = [
         "reg": 145,
         "kind": KIND_SELECT,
         "options": [
-            {"value": 0},
-            {"value": 1},
-            {"value": 2},
+            {"value": 0},  # Battery first
+            {"value": 1},  # PV first
+            {"value": 2},  # AC first
         ],
     },
     {
@@ -166,9 +166,9 @@ _ITEMS = [
         "reg": 146,
         "kind": KIND_SELECT,
         "options": [
-            {"value": 0},
-            {"value": 1},
-            {"value": 2},
+            {"value": 0},  # APL
+            {"value": 1},  # UPS
+            {"value": 2},  # GEN
         ],
     },
 
@@ -195,12 +195,12 @@ _ITEMS = [
         "bit0": 1,
         "bitwidth": 3,
         "options": [
-            {"value": 0},
-            {"value": 1},
-            {"value": 2},
-            {"value": 3},
-            {"value": 4},
-            {"value": 5},
+            {"value": 0},  # Off
+            {"value": 1},  # Time
+            {"value": 2},  # Voltage
+            {"value": 3},  # SOC
+            {"value": 4},  # Voltage + Time
+            {"value": 5},  # SOC + Time
         ],
     },
     {
@@ -332,9 +332,9 @@ _ITEMS = [
         "bit0": 4,
         "bitwidth": 2,
         "options": [
-            {"value": 0},
-            {"value": 1},
-            {"value": 2},
+            {"value": 0},  # Voltage
+            {"value": 1},  # SOC
+            {"value": 2},  # Voltage + SOC
         ],
     },
     {
