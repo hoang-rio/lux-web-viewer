@@ -5,7 +5,8 @@ import ModbusDashboard from '../ModbusDashboard';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: { defaultValue?: string }) =>
+      options && options.defaultValue !== undefined ? options.defaultValue : key,
     i18n: { language: 'en' },
   }),
 }));

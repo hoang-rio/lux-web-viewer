@@ -201,10 +201,14 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
     );
   };
 
+  const unitLabel = (item: IModbusItem) =>
+    item.unit ? t(`modbus.unit.${item.unit}`, { defaultValue: item.unit }) : '';
+
   const renderValue = (item: IModbusItem) => {
     const current = values[item.key];
     if (current === null || current === undefined) return '—';
-    return String(current) + (item.unit ? ` ${item.unit}` : '');
+    const unit = unitLabel(item);
+    return String(current) + (unit ? ` ${unit}` : '');
   };
 
   const renderRow = (item: IModbusItem) => {
@@ -220,7 +224,7 @@ const ModbusDashboard = ({ onClose }: ModbusDashboardProps) => {
         <div className="modbus-item-info">
           <div className="modbus-item-name">
             {t(`modbus.reg.${item.key}`)}
-            {item.unit && <span className="modbus-item-unit">{item.unit}</span>}
+            {unitLabel(item) && <span className="modbus-item-unit">{unitLabel(item)}</span>}
           </div>
           <div className="modbus-item-detail">
             <span className="modbus-item-current">
