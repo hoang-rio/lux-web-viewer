@@ -35,8 +35,8 @@ class TestChartAuthResponses(unittest.IsolatedAsyncioTestCase):
             (web_viewer.yearly_chart, "/yearly-chart"),
         ]
 
-        with patch.object(web_viewer, "USE_PG", True), patch.object(
-            web_viewer,
+        with patch.object(web_viewer.config, "USE_PG", True), patch.object(
+            web_viewer.security,
             "decode_access_token",
             side_effect=expired_error,
         ):
@@ -65,8 +65,8 @@ class TestChartAuthResponses(unittest.IsolatedAsyncioTestCase):
             (web_viewer.update_settings, "/settings", "POST"),
         ]
 
-        with patch.object(web_viewer, "USE_PG", True), patch.object(
-            web_viewer,
+        with patch.object(web_viewer.config, "USE_PG", True), patch.object(
+            web_viewer.security,
             "decode_access_token",
             side_effect=expired_error,
         ):
