@@ -34,6 +34,9 @@ MODE_HTTP = "HTTP"
 MODE_NOT_CONFIGURED = "NOT_CONFIGURED"
 
 DEFAULT_TIMEOUT = 5.0
+# Read function codes are idempotent, so a request that times out on the direct
+# dongle connection can be re-sent once safely (writes 0x06/0x10 are not).
+IDEMPOTENT_READ_FUNCTIONS = (0x03, 0x04)
 
 
 class ModbusUnavailableError(RuntimeError):
@@ -145,75 +148,84 @@ class ModbusController:
             expected_register = modbus_service.request_register(frame_bytes)
         except modbus_service.ModbusError:
             expected_register = None
+        retryable = expected_fn in IDEMPOTENT_READ_FUNCTIONS
+        attempts = 2 if retryable else 1
+        attempt_timeout = DEFAULT_TIMEOUT / attempts
         with self._lock:
-            sock = socket_client.connect(self._dongle_host, self._dongle_port)
-            try:
-                sock.settimeout(DEFAULT_TIMEOUT)
-                sock.sendall(frame_bytes)
-                deadline = time.monotonic() + DEFAULT_TIMEOUT
-                data = b""
-                while True:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        break
-                    try:
-                        sock.settimeout(remaining)
-                        chunk = sock.recv(1024)
-                    except (TimeoutError, socket.timeout):
-                        break
-                    if not chunk:
-                        break
-                    data += chunk
-                    # The dongle may push telemetry / other-transaction replies on
-                    # any open connection (lxp-bridge wait_for_reply). Consume
-                    # complete frames and keep only the one matching our request.
-                    while len(data) >= 8:
-                        expected = modbus_service.to_int(data[4:6]) + modbus_service._FRAME_LENGTH_ADJUST
-                        if expected > 4096 or expected < 8:
-                            data = data[1:]  # resync one byte at a time
-                            continue
-                        if len(data) < expected:
-                            break
-                        candidate, data = data[:expected], data[expected:]
-                        try:
-                            fn = modbus_service.response_function(candidate)
-                        except modbus_service.ModbusError:
-                            continue  # not a parsable frame; drop it
-                        if fn != expected_fn:
-                            logger.warning(
-                                "Modbus discarding unrelated frame fn=0x%02x (wanted 0x%02x reg=%s)",
-                                fn, expected_fn, expected_register,
-                            )
-                            continue
-                        if (
-                            expected_register is not None
-                            and modbus_service.response_register(candidate) != expected_register
-                        ):
-                            logger.warning(
-                                "Modbus discarding frame for reg=%s (wanted reg=%s)",
-                                modbus_service.response_register(candidate), expected_register,
-                            )
-                            continue
-                        logger.debug(
-                            "Modbus reply fn=0x%02x reg=%s len=%d frame=%s",
-                            expected_fn,
-                            expected_register,
-                            len(candidate),
-                            candidate.hex(),
-                        )
-                        return candidate
-            except (TimeoutError, socket.timeout):
-                logger.warning(
-                    "Modbus %s reg=%s: timeout waiting for reply (got %d bytes)",
-                    expected_fn,
-                    expected_register,
-                    len(data),
-                )
-            finally:
+            for attempt in range(1, attempts + 1):
+                sock = socket_client.connect(self._dongle_host, self._dongle_port)
                 try:
-                    sock.close()
-                except Exception:
-                    pass
+                    sock.settimeout(attempt_timeout)
+                    sock.sendall(frame_bytes)
+                    deadline = time.monotonic() + attempt_timeout
+                    data = b""
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        try:
+                            sock.settimeout(remaining)
+                            chunk = sock.recv(1024)
+                        except (TimeoutError, socket.timeout):
+                            break
+                        if not chunk:
+                            break
+                        data += chunk
+                        # The dongle may push telemetry / other-transaction replies on
+                        # any open connection (lxp-bridge wait_for_reply). Consume
+                        # complete frames and keep only the one matching our request.
+                        while len(data) >= 8:
+                            expected = modbus_service.to_int(data[4:6]) + modbus_service._FRAME_LENGTH_ADJUST
+                            if expected > 4096 or expected < 8:
+                                data = data[1:]  # resync one byte at a time
+                                continue
+                            if len(data) < expected:
+                                break
+                            candidate, data = data[:expected], data[expected:]
+                            try:
+                                fn = modbus_service.response_function(candidate)
+                            except modbus_service.ModbusError:
+                                continue  # not a parsable frame; drop it
+                            if fn != expected_fn:
+                                logger.warning(
+                                    "Modbus discarding unrelated frame fn=0x%02x (wanted 0x%02x reg=%s)",
+                                    fn, expected_fn, expected_register,
+                                )
+                                continue
+                            if (
+                                expected_register is not None
+                                and modbus_service.response_register(candidate) != expected_register
+                            ):
+                                logger.warning(
+                                    "Modbus discarding frame for reg=%s (wanted reg=%s)",
+                                    modbus_service.response_register(candidate), expected_register,
+                                )
+                                continue
+                            logger.debug(
+                                "Modbus reply fn=0x%02x reg=%s len=%d frame=%s",
+                                expected_fn,
+                                expected_register,
+                                len(candidate),
+                                candidate.hex(),
+                            )
+                            return candidate
+                except (TimeoutError, socket.timeout):
+                    logger.warning(
+                        "Modbus %s reg=%s: timeout waiting for reply (got %d bytes)",
+                        expected_fn,
+                        expected_register,
+                        len(data),
+                    )
+                finally:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                if attempt < attempts:
+                    logger.warning(
+                        "Modbus fn=0x%02x reg=%s dropped; retrying once (idempotent read)",
+                        expected_fn, expected_register,
+                    )
         raise ModbusTimeoutError("No Modbus response from dongle")
 
     async def _server_execute_raw(self, frame: bytes, expected_fn: int, dongle_serial=None) -> bytes:

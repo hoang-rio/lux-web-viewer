@@ -81,9 +81,36 @@ class TestDongleBlockingExecute(unittest.TestCase):
         unrelated = self._reply(m.FN_READ_INPUT, 0x0028, bytes([40]) + b"\x00" * 80)
         fake = _FakeSocket([unrelated, unrelated, unrelated])
         with mock.patch("modbus_controller.socket_client.connect", return_value=fake):
-            with mock.patch("modbus_controller.time.monotonic", side_effect=[0, 0.1, 0.2, 6.0]):
+            # Read is idempotent: two attempts each time out with only telemetry.
+            with mock.patch("modbus_controller.time.monotonic", side_effect=[0, 0.1, 0.2, 6.0, 0, 0.1, 6.0]):
                 with self.assertRaises(mc.ModbusTimeoutError):
                     self.controller._blocking_execute_raw(frame, m.FN_READ_HOLDING)
+
+    def test_retries_idempotent_read_once_then_succeeds(self):
+        frame = m.build_read_holding_request("1234567890", "ABCDEFGHIJ", 0x0000, 40)
+        unrelated = self._reply(m.FN_READ_INPUT, 0x0028, bytes([40]) + b"\x00" * 80)
+        block = bytes([80]) + b"".join(int(k).to_bytes(2, "little") for k in range(40))
+        reply = self._reply(m.FN_READ_HOLDING, 0x0000, block)
+        # First connection only yields telemetry (times out), second the reply.
+        with mock.patch(
+            "modbus_controller.socket_client.connect",
+            side_effect=[_FakeSocket([unrelated]), _FakeSocket([reply])],
+        ):
+            with mock.patch("modbus_controller.time.monotonic", side_effect=[0, 0.1, 6.0, 0, 0.5]):
+                result = self.controller._blocking_execute_raw(frame, m.FN_READ_HOLDING)
+        self.assertEqual(result, reply)
+
+    def test_does_not_retry_write(self):
+        frame = m.build_write_single_request(
+            "1234567890", "ABCDEFGHIJ", 0x0095, 0x024D
+        )
+        with mock.patch(
+            "modbus_controller.socket_client.connect", return_value=_FakeSocket([])
+        ) as connect:
+            with mock.patch("modbus_controller.time.monotonic", side_effect=[0, 0.1]):
+                with self.assertRaises(mc.ModbusTimeoutError):
+                    self.controller._blocking_execute_raw(frame, m.FN_WRITE_SINGLE)
+        self.assertEqual(connect.call_count, 1)
 
 
 class _FakeReadController(mc.ModbusController):
