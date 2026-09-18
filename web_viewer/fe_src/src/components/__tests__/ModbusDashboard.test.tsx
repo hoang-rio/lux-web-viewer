@@ -6,7 +6,8 @@ import ModbusDashboard from '../ModbusDashboard';
 // Keep `t` module-stable: ModbusDashboard memoizes `fetchAll` on `t`, so a
 // fresh `t` every render would re-run the effect forever.
 vi.mock('react-i18next', () => {
-  const t = (key: string) => key;
+  const t = (key: string, options?: { defaultValue?: string }) =>
+    options && options.defaultValue !== undefined ? options.defaultValue : key;
   return { useTranslation: () => ({ t }) };
 });
 
@@ -17,7 +18,8 @@ vi.mock('../Loading', () => ({
 // apiFetch (via ../utils/fetchUtil) imports the i18n instance for error
 // messages; give it a passthrough t so the real i18n bootstrap is not needed.
 vi.mock('../../i18n', () => {
-  const t = (key: string) => key;
+  const t = (key: string, options?: { defaultValue?: string }) =>
+    options && options.defaultValue !== undefined ? options.defaultValue : key;
   return { default: { t } };
 });
 

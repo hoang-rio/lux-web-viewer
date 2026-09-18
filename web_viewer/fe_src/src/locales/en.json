@@ -413,6 +413,9 @@
         "1": "SOC",
         "2": "Voltage + SOC"
       }
+    },
+    "unit": {
+      "days": "days"
     }
   }
 }
