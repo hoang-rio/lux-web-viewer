@@ -45,10 +45,10 @@ You can control which inverter input frame is requested by setting `READ_INPUT_M
 * Sync gitsubmodule with `git submodule init && git submodule update`
 * Python 3 required
 * Setup python venv with `python -m venv venv`
-* Active python venv `source venv/Scripts/activate` on git-bash Windows or `source venv/bin/active` on Unix/Linux
+* Activate python venv `source venv/Scripts/activate` on git-bash Windows or `source venv/bin/activate` on Unix/Linux
 * Install dependencies with `pip install -r requirements.txt` or `./pip-binary-install.sh` on low-end device (example: OpenWrt router)
 * Run application with `python app.py`
-> If you can't install and run you can use docker method bellow
+> If you can't install and run you can use docker method below
 
 ## Locking for docker? Here is step
 * cd to `docker` folder
@@ -67,6 +67,23 @@ The built-in web server exposes mobile-friendly APIs:
 * Build FE with command `cd web_viewer/fe_src && yarn install && yarn build` (Ignore this step if you run via docker)
 * Now you can see LuxPower realtime web viewer in http://localhost:88 (or another port if you changed `PORT` in `.env`).
 * HTTPS is also supported; enable it by setting `HTTPS_ENABLED=true` and providing `HTTPS_PORT`, `HTTPS_CERT_FILE`, and `HTTPS_KEY_FILE` in `.env`.
+
+## Modbus Register Read/Write
+The app can read and write inverter registers over the Modbus protocol through the existing dongle connection — no extra hardware or configuration is required. In SERVER mode Modbus requests are seamlessly interleaved with the normal ReadInput polling so real-time monitoring keeps running; in DONGLE mode requests go directly to the dongle.
+
+### Features
+* Read/write Modbus registers (fc 3/4 read, fc 6/16 write) via the dongle
+* ~60 settings grouped into categories: Beep/Audio, Application, Charge, Discharge, Battery
+* Admin dashboard (Settings → Modbus) to browse, read, and apply register values
+* Reads are cached (default 30s, `MODBUS_READ_CACHE_TTL`) and invalidated on write; idempotent reads (fc 3/4) are retried once on timeout
+
+### REST APIs
+* `GET /modbus/status` — controller status
+* `GET /modbus/registers` — register catalog grouped by category
+* `GET /modbus/read?category=<key>` — read current values (omit `category` to read all)
+* `POST /modbus/write` with JSON `{ "key": <register key>, "value": <new value> }` to write a register
+
+Access requires a valid JWT and is scoped to the logged-in user's registered inverters.
 
 <center>
 <picture style="max-width: 800px">

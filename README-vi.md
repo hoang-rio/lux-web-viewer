@@ -19,6 +19,20 @@ Xem hướng dẫn trên wiki của `lxp-bridge` [tại đây](https://github.co
 * Sao chép `.env.example` thành `.env`
 * Cập nhật thông tin cấu hình trong tập tin `.env` với thông tin của bạn
 
+### Nền tảng đa khách hàng (PostgreSQL)
+
+Nhánh này bao gồm nền tảng PostgreSQL + Alembic cho tính năng sắp tới hỗ trợ nhiều người dùng và nhiều biến tần.
+
+Các biến `.env` mới bắt buộc:
+
+* `POSTGRES_DB_URL` (ví dụ: `postgresql+psycopg://postgres:postgres@localhost:5432/lux_web_viewer`)
+* `JWT_SECRET`, `JWT_ACCESS_EXPIRE_MINUTES`, `JWT_REFRESH_EXPIRE_DAYS`
+* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TLS`, `SMTP_SSL`
+
+Chạy migration ban đầu:
+
+* `alembic upgrade head`
+
 ### Chế độ ReadInput (DONGLE/SERVER)
 Bạn có thể chọn loại frame input cần đọc bằng biến `READ_INPUT_MODE` trong `.env`:
 
@@ -31,7 +45,7 @@ Bạn có thể chọn loại frame input cần đọc bằng biến `READ_INPUT
 * Đồng bộ git submodule với `git submodule init && git submodule update`
 * Yêu cầu Python 3
 * Tạo môi trường ảo Python với `python -m venv venv`
-* Kích hoạt môi trường ảo Python bằng `source venv/Scripts/activate` trên Windows dùng git-bash hoặc `source venv/bin/active` trên Unix/Linux
+* Kích hoạt môi trường ảo Python bằng `source venv/Scripts/activate` trên Windows dùng git-bash hoặc `source venv/bin/activate` trên Unix/Linux
 * Cài đặt các thư viện phụ thuộc với `pip install -r requirements.txt` hoặc `./pip-binary-install.sh` trên thiết bị cấu hình yếu (ví dụ: bộ định tuyến OpenWrt)
 * Chạy ứng dụng với `python app.py`
 > Nếu bạn không thể cài đặt và chạy ứng dụng, bạn có thể sử dụng phương pháp chạy bằng docker bên dưới
@@ -53,6 +67,23 @@ Web server tích hợp cung cấp các API thân thiện với thiết bị di �
 * Biên dịch giao diện với lệnh `cd web_viewer/fe_src && yarn install && yarn build` (Bỏ qua bước này nếu bạn chạy bằng docker)
 * Bây giờ bạn có thể xem giao diện web LuxPower theo thời gian thực tại http://localhost:88 (hoặc ở cổng khác nếu bạn thay đổi `PORT` trong `.env`).
 * HTTPS cũng được hỗ trợ; bật bằng cách đặt `HTTPS_ENABLED=true` và cung cấp `HTTPS_PORT`, `HTTPS_CERT_FILE`, `HTTPS_KEY_FILE` trong `.env`.
+
+## Đọc/Ghi register Modbus
+Ứng dụng có thể đọc và ghi register biến tần qua giao thức Modbus sử dụng chính kết nối dongle hiện có — không cần phần cứng hay cấu hình bổ sung. Ở chế độ SERVER, các yêu cầu Modbus được xen kẽ liền mạch với chu kỳ poll ReadInput nên việc giám sát thời gian thực vẫn chạy bình thường; ở chế độ DONGLE, yêu cầu được gửi trực tiếp tới dongle.
+
+### Tính năng
+* Đọc/ghi register Modbus (fc 3/4 đọc, fc 6/16 ghi) qua dongle
+* Khoảng 60 cài đặt nhóm theo loại: Âm thanh còi, Ứng dụng, Sạc, Xả, Pin
+* Bảng điều khiển quản trị (Cài đặt → Modbus) để duyệt, đọc và áp dụng giá trị register
+* Giá trị đọc được lưu cache (mặc định 30 giây, `MODBUS_READ_CACHE_TTL`) và làm mới khi ghi; lệnh đọc an toàn (fc 3/4) được thử lại một lần khi hết thời gian chờ
+
+### REST API
+* `GET /modbus/status` — trạng thái controller
+* `GET /modbus/registers` — danh mục register nhóm theo loại
+* `GET /modbus/read?category=<key>` — đọc giá trị hiện tại (bỏ qua `category` để đọc tất cả)
+* `POST /modbus/write` với JSON `{ "key": <mã register>, "value": <giá trị mới> }` để ghi register
+
+Truy cập yêu cầu JWT hợp lệ và chỉ áp dụng cho inverter đã đăng ký của người dùng đã đăng nhập.
 
 <center>
 <picture style="max-width: 800px">
