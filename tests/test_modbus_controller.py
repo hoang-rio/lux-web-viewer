@@ -1,7 +1,9 @@
+import asyncio
 import unittest
 from unittest import mock
 
 import modbus_controller as mc
+import modbus_registers as mr
 import modbus_service as m
 
 
@@ -82,6 +84,61 @@ class TestDongleBlockingExecute(unittest.TestCase):
             with mock.patch("modbus_controller.time.monotonic", side_effect=[0, 0.1, 0.2, 6.0]):
                 with self.assertRaises(mc.ModbusTimeoutError):
                     self.controller._blocking_execute_raw(frame, m.FN_READ_HOLDING)
+
+
+class _FakeReadController(mc.ModbusController):
+    """Records requested ranges and returns register==value payloads."""
+
+    def __init__(self):
+        super().__init__()
+        self.mode = mc.MODE_DONGLE
+        self.available = True
+        self.requests = []
+
+    async def _read_holding_range_async(self, start: int, count: int, dongle_serial=None) -> bytes:
+        self.requests.append((start, count, dongle_serial))
+        payload = bytearray()
+        for reg in range(start, start + count):
+            payload += reg.to_bytes(2, "little")
+        return bytes(payload)
+
+
+class TestHoldingRangeCoalescing(unittest.TestCase):
+    def test_full_catalog_merges_into_two_requests(self):
+        regs = [item["reg"] for item in mr.all_items()]
+        self.assertEqual(
+            mc.ModbusController._coalesce_ranges(regs, 125),
+            [(0, 120), (120, 120)],
+        )
+
+    def test_block_cap_keeps_one_request_per_block(self):
+        regs = [item["reg"] for item in mr.all_items()]
+        self.assertEqual(len(mc.ModbusController._coalesce_ranges(regs, 40)), 6)
+
+    def test_gaps_split_ranges(self):
+        # reg 110 -> block 80, reg 204 -> block 200 (gap between them).
+        self.assertEqual(
+            mc.ModbusController._coalesce_ranges([110, 204], 125),
+            [(80, 40), (200, 40)],
+        )
+
+    def test_read_items_full_catalog_uses_two_requests_and_parses(self):
+        ctrl = _FakeReadController()
+        result = asyncio.run(ctrl.read_items([item["key"] for item in mr.all_items()]))
+        self.assertEqual(ctrl.requests, [(0, 120, None), (120, 120, None)])
+        for item in mr.all_items():
+            self.assertEqual(result[item["key"]], mr.extract_value(item, item["reg"]))
+
+    def test_read_items_respects_lower_max_count(self):
+        ctrl = _FakeReadController()
+        ctrl._HOLDING_MAX_COUNT = 40
+        asyncio.run(ctrl.read_items([item["key"] for item in mr.all_items()]))
+        self.assertEqual(len(ctrl.requests), 6)
+
+    def test_read_items_passes_dongle_serial(self):
+        ctrl = _FakeReadController()
+        asyncio.run(ctrl.read_items(["buzzer"], dongle_serial="DONGLE-A"))
+        self.assertEqual(ctrl.requests, [(80, 40, "DONGLE-A")])
 
 
 if __name__ == "__main__":

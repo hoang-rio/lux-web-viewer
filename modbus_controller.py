@@ -225,6 +225,10 @@ class ModbusController:
     # holds live telemetry only — the same register numbers mean different
     # things there, so reading the catalog via input blocks yields wrong values.
     _HOLDING_BLOCK_COUNT = 40
+    # Maximum registers per single 0x03 (ReadHolding) request.  The Modbus spec
+    # allows 125; the device/dongle may support less.  Lower this to 40 to fall
+    # back to the previous one-request-per-block behaviour.
+    _HOLDING_MAX_COUNT = 125
 
     @staticmethod
     def _block_for(register: int) -> tuple:
@@ -232,18 +236,42 @@ class ModbusController:
         count = ModbusController._HOLDING_BLOCK_COUNT
         return base, count, register - base
 
-    async def _read_holding_block_async(self, base: int, count: int, dongle_serial=None) -> bytes:
+    @staticmethod
+    def _coalesce_ranges(registers, max_count: int) -> list:
+        """Merge register addresses into the fewest contiguous read requests.
+
+        Holding blocks tile the register space, so adjacent needed blocks are
+        merged into one request.  Because the merged range only spans blocks that
+        would be read anyway, no extra registers are fetched.  Runs longer than
+        ``max_count`` are split into separate requests.
+        """
+        block = ModbusController._HOLDING_BLOCK_COUNT
+        bases = sorted({(reg // block) * block for reg in registers})
+        ranges = []
+        for base in bases:
+            if ranges:
+                start, count = ranges[-1]
+                if base == start + count and count + block <= max_count:
+                    ranges[-1] = (start, count + block)
+                    continue
+            ranges.append((base, min(block, max_count)))
+        return ranges
+
+    async def _read_holding_range_async(self, start: int, count: int, dongle_serial=None) -> bytes:
         dongle, inverter = self._resolved_serials(dongle_serial)
         frame = modbus_service.build_read_holding_request(
-            dongle, inverter, register=base, count=count
+            dongle, inverter, register=start, count=count
         )
         raw = await self.execute_raw(frame, FN_READ_HOLDING, dongle_serial=dongle_serial)
         register, payload = modbus_service.read_response_values(raw, FN_READ_HOLDING)
         logger.debug(
-            "Read holding block reg=%s count=%s: echo_reg=%s payload=%d bytes",
-            base, count, register, len(payload),
+            "Read holding range reg=%s count=%s: echo_reg=%s payload=%d bytes",
+            start, count, register, len(payload),
         )
         return payload
+
+    async def _read_holding_block_async(self, base: int, count: int, dongle_serial=None) -> bytes:
+        return await self._read_holding_range_async(base, count, dongle_serial=dongle_serial)
 
     async def _read_holding_async(self, register: int, dongle_serial=None) -> int:
         base, count, offset = self._block_for(register)
@@ -270,34 +298,31 @@ class ModbusController:
             seen_regs.add(item["reg"])
             items.append(item)
 
+        max_count = max(self._HOLDING_MAX_COUNT, self._HOLDING_BLOCK_COUNT)
+        ranges = self._coalesce_ranges([item["reg"] for item in items], max_count)
         logger.debug(
-            "Read %d register items in %d blocks",
+            "Read %d register items in %d request(s): %s",
             len(items),
-            len(set(self._block_for(i["reg"])[0] for i in items)),
+            len(ranges),
+            ranges,
         )
 
-        # Read each needed holding block once, then build a reg→raw map.
-        # Blocks are keyed by base register (0, 40, 80, 120, ...).
-        blocks: dict[int, bytes] = {}
-        for item in items:
-            base, count, offset = self._block_for(item["reg"])
-            if base not in blocks:
-                blocks[base] = await self._read_holding_block_async(base, count, dongle_serial=dongle_serial)
-
-        # Build reg→raw from blocks.  payload[2*offset] is the register value.
+        # Read each needed range once, then build a reg→raw map.  payload[2*k]
+        # is the register at ``start + k``.
         reg_raw: dict[int, int] = {}
-        for base, block in blocks.items():
+        for start, count in ranges:
+            payload = await self._read_holding_range_async(start, count, dongle_serial=dongle_serial)
             for item in items:
-                ibase, _, ioffset = self._block_for(item["reg"])
-                if ibase != base:
+                reg = item["reg"]
+                if not (start <= reg < start + count):
                     continue
-                start = ioffset * 2
-                if start + 2 <= len(block):
-                    reg_raw[item["reg"]] = modbus_service.to_int(block[start : start + 2])
+                offset = (reg - start) * 2
+                if offset + 2 <= len(payload):
+                    reg_raw[reg] = modbus_service.to_int(payload[offset : offset + 2])
                 else:
                     logger.warning(
-                        "Register %s out of block range: offset=%s block_len=%s",
-                        item["reg"], start, len(block),
+                        "Register %s out of range %s:%s (payload_len=%s)",
+                        reg, start, count, len(payload),
                     )
 
         result = {}
