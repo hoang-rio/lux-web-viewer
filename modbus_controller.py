@@ -55,6 +55,9 @@ class ModbusController:
         self._lock = threading.Lock()
         self._server = None
         self._server_loop = None
+        self._read_cache = {}
+        self._read_cache_lock = threading.Lock()
+        self._read_cache_ttl = self._READ_CACHE_TTL
 
     def configure(self, config: dict) -> None:
         self._dongle_serial = str(config.get("DONGLE_SERIAL") or "")
@@ -74,6 +77,12 @@ class ModbusController:
             except (TypeError, ValueError):
                 self._dongle_port = 8000
             self.available = bool(self._dongle_host) and bool(self._dongle_serial) and bool(self._inverter_serial)
+        cache_ttl = config.get("MODBUS_READ_CACHE_TTL")
+        try:
+            self._read_cache_ttl = float(cache_ttl) if cache_ttl else self._READ_CACHE_TTL
+        except (TypeError, ValueError):
+            self._read_cache_ttl = self._READ_CACHE_TTL
+        self._read_cache.clear()
         logger.info("ModbusController mode=%s available=%s", self.mode, self.available)
 
     def set_server(self, server, main_loop) -> None:
@@ -207,6 +216,10 @@ class ModbusController:
     # allows 125; the device/dongle may support less.  Lower this to 40 to fall
     # back to the previous one-request-per-block behaviour.
     _HOLDING_MAX_COUNT = 125
+    # Server-side TTL cache for holding-range raw payloads.  Settings are read
+    # far more often than they change and several users may poll the same
+    # ranges, so this cuts repeated serial-bus reads.
+    _READ_CACHE_TTL = 30.0
 
     @staticmethod
     def _block_for(register: int) -> tuple:
@@ -235,7 +248,8 @@ class ModbusController:
             ranges.append((base, min(block, max_count)))
         return ranges
 
-    async def _read_holding_range_async(self, start: int, count: int) -> bytes:
+    async def _fetch_holding_range(self, start: int, count: int) -> bytes:
+        """Perform the actual serial read of ``count`` holding registers."""
         frame = modbus_service.build_read_holding_request(
             self._dongle_serial, self._inverter_serial, register=start, count=count
         )
@@ -247,12 +261,62 @@ class ModbusController:
         )
         return payload
 
-    async def _read_holding_block_async(self, base: int, count: int) -> bytes:
-        return await self._read_holding_range_async(base, count)
+    def _read_cache_get(self, key: tuple) -> bytes:
+        with self._read_cache_lock:
+            entry = self._read_cache.get(key)
+            if entry is None:
+                return None
+            payload, expiry = entry
+            if time.monotonic() >= expiry:
+                del self._read_cache[key]
+                return None
+            return payload
 
-    async def _read_holding_async(self, register: int) -> int:
+    def _read_cache_set(self, key: tuple, payload: bytes) -> None:
+        expiry = time.monotonic() + self._read_cache_ttl
+        with self._read_cache_lock:
+            self._read_cache[key] = (payload, expiry)
+
+    def _update_register_cache(self, dongle: str, inverter: str, register: int, raw: int) -> None:
+        """Patch a freshly written register into cached payloads so follow-up
+        reads do not force a cold serial re-read.  Entries that cannot be
+        patched are dropped (the next read refreshes them).
+        """
+        with self._read_cache_lock:
+            for key in list(self._read_cache):
+                if not (
+                    key[0] == dongle and key[1] == inverter
+                    and key[2] <= register < key[2] + key[3]
+                ):
+                    continue
+                payload, expiry = self._read_cache[key]
+                offset = (register - key[2]) * 2
+                if offset + 2 > len(payload):
+                    del self._read_cache[key]
+                    continue
+                patched = payload[:offset] + raw.to_bytes(2, "little") + payload[offset + 2:]
+                self._read_cache[key] = (patched, expiry)
+
+    async def _read_holding_range_async(self, start: int, count: int,
+                                        use_cache: bool = True) -> bytes:
+        """Fetch a holding range, served from the TTL cache when fresh."""
+        key = (self._dongle_serial, self._inverter_serial, start, count)
+        if use_cache:
+            payload = self._read_cache_get(key)
+            if payload is not None:
+                logger.debug("Holding read cache hit reg=%s count=%s", start, count)
+                return payload
+        payload = await self._fetch_holding_range(start, count)
+        self._read_cache_set(key, payload)
+        return payload
+
+    async def _read_holding_block_async(self, base: int, count: int,
+                                        use_cache: bool = True) -> bytes:
+        return await self._read_holding_range_async(base, count, use_cache=use_cache)
+
+    async def _read_holding_async(self, register: int, use_cache: bool = True) -> int:
         base, count, offset = self._block_for(register)
-        payload = await self._read_holding_block_async(base, count)
+        payload = await self._read_holding_block_async(base, count, use_cache=use_cache)
         start = offset * 2
         if start + 2 > len(payload):
             raise modbus_service.ModbusTruncatedFrame(
@@ -350,9 +414,14 @@ class ModbusController:
         if item.get("verify"):
             # Items that explicitly require strong confirmation re-read the
             # register after the write instead of trusting the echo.
-            fresh_raw = await self._read_holding_async(item["reg"])
+            fresh_raw = await self._read_holding_async(item["reg"], use_cache=False)
         else:
             fresh_raw = echo_raw
+            # Keep the read cache warm with the confirmed echo value so other
+            # users do not force a cold re-read after this write.
+            self._update_register_cache(
+                self._dongle_serial, self._inverter_serial, item["reg"], echo_raw
+            )
         logger.debug(
             "Modbus write verify key=%s reg=%s fresh_raw=0x%04x value=%r",
             item["key"], item["reg"], fresh_raw,

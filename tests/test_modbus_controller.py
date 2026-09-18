@@ -155,7 +155,7 @@ class _FakeWriteController(mc.ModbusController):
         self.executed.append((expected_fn, bytes(frame)))
         return self.ECHO_RAW
 
-    async def _read_holding_async(self, register) -> int:
+    async def _read_holding_async(self, register, use_cache=True) -> int:
         self.read_calls.append(register)
         return self.verify_read_return
 
@@ -183,6 +183,70 @@ class TestWriteItemVerification(unittest.TestCase):
         # RMW read + post-write verify read.
         self.assertEqual(len(ctrl.read_calls), 2)
         self.assertEqual(result, mr.extract_value(item, ctrl.verify_read_return))
+
+
+class _FakeCachedWriteController(mc.ModbusController):
+    """Reads return register==value payloads (served via the TTL cache) and
+    execute() simulates a write echo."""
+
+    ECHO_RAW = 0x42
+
+    def __init__(self):
+        super().__init__()
+        self.mode = mc.MODE_DONGLE
+        self.available = True
+        self._dongle_serial = "1234567890"
+        self._inverter_serial = "ABCDEFGHIJ"
+        self.requests = []
+        self.executed = []
+
+    async def _fetch_holding_range(self, start: int, count: int) -> bytes:
+        self.requests.append((start, count))
+        payload = bytearray()
+        for reg in range(start, start + count):
+            payload += reg.to_bytes(2, "little")
+        return bytes(payload)
+
+    async def execute(self, frame, expected_fn) -> int:
+        self.executed.append((expected_fn, bytes(frame)))
+        return self.ECHO_RAW
+
+
+class TestReadCache(unittest.TestCase):
+    def test_second_read_is_cached(self):
+        ctrl = _FakeCachedWriteController()
+        keys = [item["key"] for item in mr.all_items()]
+        asyncio.run(ctrl.read_items(keys))
+        self.assertEqual(ctrl.requests, [(0, 120), (120, 120)])
+        asyncio.run(ctrl.read_items(keys))
+        self.assertEqual(ctrl.requests, [(0, 120), (120, 120)])
+
+    def test_expired_entry_is_refetched(self):
+        ctrl = _FakeCachedWriteController()
+        ctrl._read_cache_ttl = 0.0
+        keys = [item["key"] for item in mr.all_items()]
+        asyncio.run(ctrl.read_items(keys))
+        asyncio.run(ctrl.read_items(keys))
+        self.assertEqual(len(ctrl.requests), 4)
+
+    def test_write_patches_cached_payload(self):
+        ctrl = _FakeCachedWriteController()
+        keys = [item["key"] for item in mr.all_items()]
+        asyncio.run(ctrl.read_items(keys))
+        item = mr.get_item("grid_export_percent")
+        result = asyncio.run(ctrl.write_item(item, 42))
+        result2 = asyncio.run(ctrl.read_items(keys))
+        # Write patches the cached payload → no cold re-read, and reads see it.
+        self.assertEqual(ctrl.requests, [(0, 120), (120, 120)])
+        self.assertEqual(result, mr.extract_value(item, ctrl.ECHO_RAW))
+        self.assertEqual(result2["grid_export_percent"], mr.extract_value(item, ctrl.ECHO_RAW))
+
+    def test_use_cache_false_forces_serial_read(self):
+        ctrl = _FakeCachedWriteController()
+        asyncio.run(ctrl.read_items(["hybrid"]))  # block 0 cached
+        asyncio.run(ctrl._read_holding_range_async(0, 40, use_cache=True))
+        asyncio.run(ctrl._read_holding_range_async(0, 40, use_cache=False))
+        self.assertEqual(ctrl.requests, [(0, 40), (0, 40)])
 
 
 if __name__ == "__main__":
