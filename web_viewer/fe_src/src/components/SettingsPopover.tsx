@@ -263,8 +263,8 @@ const SettingsPopover = forwardRef<HTMLDivElement, SettingsPopoverProps>(({ onCl
               {/* Cpu icon SVG */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
+                width="20"
+                height="20"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"

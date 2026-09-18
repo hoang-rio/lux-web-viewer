@@ -148,11 +148,13 @@
 }
 
 .triggers-dashboard-btn {
-    border: none;
-    padding: 5px;
+    border: 1px solid var(--ui-border);
+    border-radius: 10px;
+    padding: 6px;
+    background: var(--ui-surface-soft);
+    color: var(--ui-primary);
     cursor: pointer;
-    background-color: transparent;
-    color: green;
+    transition: background-color 0.18s ease, transform 0.18s ease;
 }
 
 .triggers-dashboard-btn svg {
@@ -160,11 +162,12 @@
 }
 
 .triggers-dashboard-btn.active {
-    background-color: lightgray;
+    background: var(--ui-primary-soft);
 }
 
 .triggers-dashboard-btn:not(.active):hover {
-    background-color: #f0f0f0; /* Light mode hover background, matching gear/notification icons */
+    background: var(--ui-primary-soft);
+    transform: translateY(-1px);
 }
 
 .settings-popover .settings-message {
@@ -224,10 +227,13 @@
     .settings-popover .setting-description {
         color: var(--ui-muted);
     }
-    .triggers-dashboard-btn.active {
-        background-color: #555;
+    .triggers-dashboard-btn {
+        background: var(--ui-surface-soft);
+        border-color: var(--ui-border);
+        color: var(--ui-text);
     }
+    .triggers-dashboard-btn.active,
     .triggers-dashboard-btn:not(.active):hover {
-        background-color: #666; /* Dark mode hover background, matching gear/notification icons */
+        background: #2a3e47;
     }
 }
