@@ -272,6 +272,7 @@ class ModbusController:
 
     async def _fetch_holding_range(self, start: int, count: int, dongle_serial=None) -> bytes:
         """Perform the actual serial read of ``count`` holding registers."""
+        t0 = time.monotonic()
         dongle, inverter = self._resolved_serials(dongle_serial)
         frame = modbus_service.build_read_holding_request(
             dongle, inverter, register=start, count=count
@@ -279,8 +280,8 @@ class ModbusController:
         raw = await self.execute_raw(frame, FN_READ_HOLDING, dongle_serial=dongle_serial)
         register, payload = modbus_service.read_response_values(raw, FN_READ_HOLDING)
         logger.debug(
-            "Read holding range reg=%s count=%s: echo_reg=%s payload=%d bytes",
-            start, count, register, len(payload),
+            "Read holding range reg=%s count=%s: echo_reg=%s payload=%d bytes took %.0fms",
+            start, count, register, len(payload), (time.monotonic() - t0) * 1000,
         )
         return payload
 

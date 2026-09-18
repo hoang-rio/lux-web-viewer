@@ -159,6 +159,13 @@ class TestServerModeReadInterleave(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(values["buzzer"], 0)
         self.assertEqual(values["warning_voltage"], 16.2)
 
+        stats = server.modbus_stats()
+        self.assertGreaterEqual(stats["enqueued"], 1)
+        self.assertGreaterEqual(stats["sent"], 1)
+        self.assertGreaterEqual(stats["replied"], 1)
+        self.assertGreaterEqual(stats["avg_queue_wait"], 0)
+        self.assertGreaterEqual(stats["avg_latency"], 0)
+
     async def test_read_does_not_time_out_with_large_sleep_time(self):
         # Regression: the poll loop used to block in interruptible_sleep(SLEEP_TIME)
         # while a Modbus reply was already in flight, so the caller's 6s timeout

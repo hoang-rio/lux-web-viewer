@@ -118,6 +118,19 @@ class DongleServer:
         # requests can be routed to a specific dongle in multi-tenant mode.
         self.__connections: dict[str, _DongleConnection] = {}
         self.__dongle_command_gap = float(config.get("DONGLE_COMMAND_GAP", 0.8))
+        # On-demand Modbus bus-load metrics (measure serial contention between
+        # the continuous ReadInput polls and settings reads/writes).
+        self._modbus_stats = {
+            "enqueued": 0,
+            "sent": 0,
+            "replied": 0,
+            "timed_out": 0,
+            "retried": 0,
+            "queue_wait_total": 0.0,
+            "queue_wait_max": 0.0,
+            "latency_total": 0.0,
+            "latency_max": 0.0,
+        }
 
     async def __write_dongle_command(self, writer: asyncio.StreamWriter, raw: bytes, ctx: _DongleConnection) -> None:
         loop = asyncio.get_running_loop()
@@ -230,17 +243,21 @@ class DongleServer:
             "future": future,
             "sent": False,
             "return_raw": bool(return_raw),
+            "enqueued_at": time.monotonic(),
         }
         retryable = expected_fn in IDEMPOTENT_READ_FUNCTIONS
         attempt_timeout = timeout / 2 if retryable else timeout
         ctx.modbus_pending.append(entry)
+        self._modbus_stats["enqueued"] += 1
         ctx.modbus_wake.set()
         try:
             return await asyncio.wait_for(asyncio.shield(future), attempt_timeout)
         except asyncio.TimeoutError:
             self.__dequeue_modbus(ctx.modbus_pending, future)
+            self._modbus_stats["timed_out"] += 1
             if not retryable:
                 raise
+            self._modbus_stats["retried"] += 1
             self.__logger.warning(
                 "Modbus fn=0x%02x reg=%s timed out on dongle %s; retrying once",
                 expected_fn,
@@ -256,6 +273,7 @@ class DongleServer:
                 return await asyncio.wait_for(asyncio.shield(future), attempt_timeout)
             except asyncio.TimeoutError:
                 self.__dequeue_modbus(ctx.modbus_pending, future)
+                self._modbus_stats["timed_out"] += 1
                 raise
         except asyncio.CancelledError:
             self.__dequeue_modbus(ctx.modbus_pending, future)
@@ -263,6 +281,13 @@ class DongleServer:
 
     def __has_unsent_modbus(self, ctx: _DongleConnection) -> bool:
         return any(not item.get("sent") for item in ctx.modbus_pending)
+
+    def modbus_stats(self) -> dict:
+        """Snapshot of on-demand Modbus bus-load metrics (serial contention)."""
+        s = dict(self._modbus_stats)
+        s["avg_queue_wait"] = s["queue_wait_total"] / (s["sent"] or 1)
+        s["avg_latency"] = s["latency_total"] / (s["replied"] or 1)
+        return s
 
     def __has_inflight_modbus(self, ctx: _DongleConnection) -> bool:
         return any(item.get("sent") for item in ctx.modbus_pending)
@@ -273,6 +298,12 @@ class DongleServer:
             if not item.get("sent"):
                 item["sent"] = True
                 await self.__write_dongle_command(writer, item["frame"], ctx)
+                item["sent_at"] = time.monotonic()
+                self._modbus_stats["sent"] += 1
+                waited = item["sent_at"] - item.get("enqueued_at", item["sent_at"])
+                self._modbus_stats["queue_wait_total"] += waited
+                if waited > self._modbus_stats["queue_wait_max"]:
+                    self._modbus_stats["queue_wait_max"] = waited
                 self.__logger.debug(
                     "Sent Modbus request (fn=0x%02x reg=%s) to dongle %s",
                     item["fn"], item.get("register"), ctx.dongle_serial,
@@ -312,6 +343,25 @@ class DongleServer:
                     future.set_result(value)
             except Exception as e:
                 future.set_exception(e)
+            self._modbus_stats["replied"] += 1
+            enqueued_at = entry.get("enqueued_at", time.monotonic())
+            latency = time.monotonic() - enqueued_at
+            self._modbus_stats["latency_total"] += latency
+            if latency > self._modbus_stats["latency_max"]:
+                self._modbus_stats["latency_max"] = latency
+            queue_wait = (entry.get("sent_at") or enqueued_at) - enqueued_at
+            warn_sec = float(self.__config.get("MODBUS_LATENCY_WARN_SEC") or 2.0)
+            if latency >= warn_sec:
+                self.__logger.warning(
+                    "Modbus fn=0x%02x reg=%s latency=%.3fs (queue=%.3fs) exceeded %.1fs; "
+                    "consider raising READ_LOW_FREQ_INTERVAL",
+                    base_fn, register, latency, queue_wait, warn_sec,
+                )
+            else:
+                self.__logger.debug(
+                    "Modbus fn=0x%02x reg=%s latency=%.3fs (queue=%.3fs)",
+                    base_fn, register, latency, queue_wait,
+                )
             return True
         return False
 
