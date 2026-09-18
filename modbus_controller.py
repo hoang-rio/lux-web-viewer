@@ -343,9 +343,16 @@ class ModbusController:
         frame = modbus_service.build_write_single_request(
             self._dongle_serial, self._inverter_serial, item["reg"], raw
         )
-        await self.execute(frame, FN_WRITE_SINGLE)
+        # execute() parses and returns the device's 0x06 echo of the written
+        # register value, which confirms the write landed without an extra read.
+        echo_raw = await self.execute(frame, FN_WRITE_SINGLE)
 
-        fresh_raw = await self._read_holding_async(item["reg"])
+        if item.get("verify"):
+            # Items that explicitly require strong confirmation re-read the
+            # register after the write instead of trusting the echo.
+            fresh_raw = await self._read_holding_async(item["reg"])
+        else:
+            fresh_raw = echo_raw
         logger.debug(
             "Modbus write verify key=%s reg=%s fresh_raw=0x%04x value=%r",
             item["key"], item["reg"], fresh_raw,

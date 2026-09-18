@@ -136,5 +136,54 @@ class TestHoldingRangeCoalescing(unittest.TestCase):
         self.assertEqual(len(ctrl.requests), 6)
 
 
+class _FakeWriteController(mc.ModbusController):
+    """Records writes and block reads; simulates a write echo."""
+
+    ECHO_RAW = 0x42
+
+    def __init__(self):
+        super().__init__()
+        self.mode = mc.MODE_DONGLE
+        self.available = True
+        self._dongle_serial = "1234567890"
+        self._inverter_serial = "ABCDEFGHIJ"
+        self.executed = []
+        self.read_calls = []
+        self.verify_read_return = 0x1111
+
+    async def execute(self, frame, expected_fn) -> int:
+        self.executed.append((expected_fn, bytes(frame)))
+        return self.ECHO_RAW
+
+    async def _read_holding_async(self, register) -> int:
+        self.read_calls.append(register)
+        return self.verify_read_return
+
+
+class TestWriteItemVerification(unittest.TestCase):
+    def test_full_register_item_skips_verify_read(self):
+        ctrl = _FakeWriteController()
+        item = mr.get_item("grid_export_percent")
+        result = asyncio.run(ctrl.write_item(item, 42))
+        self.assertEqual(ctrl.read_calls, [])
+        self.assertEqual(result, mr.extract_value(item, ctrl.ECHO_RAW))
+
+    def test_rmw_item_skips_verify_read(self):
+        ctrl = _FakeWriteController()
+        item = mr.get_item("buzzer")
+        result = asyncio.run(ctrl.write_item(item, True))
+        # One read for RMW only; no post-write verify read.
+        self.assertEqual(len(ctrl.read_calls), 1)
+        self.assertEqual(result, mr.extract_value(item, ctrl.ECHO_RAW))
+
+    def test_verify_flagged_item_keeps_verify_read(self):
+        ctrl = _FakeWriteController()
+        item = mr.get_item("hybrid")
+        result = asyncio.run(ctrl.write_item(item, True, confirm=True))
+        # RMW read + post-write verify read.
+        self.assertEqual(len(ctrl.read_calls), 2)
+        self.assertEqual(result, mr.extract_value(item, ctrl.verify_read_return))
+
+
 if __name__ == "__main__":
     unittest.main()
