@@ -6,7 +6,7 @@ import modbus_registers as m
 class TestCatalogSpec(unittest.TestCase):
     def test_length_and_uniqueness(self):
         items = m.all_items()
-        self.assertEqual(len(items), 60)
+        self.assertEqual(len(items), 62)
         keys = [it["key"] for it in items]
         self.assertEqual(len(set(keys)), len(keys))
         by_reg = {}

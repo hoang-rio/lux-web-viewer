@@ -302,6 +302,8 @@
       "charge_first_time_3_start": "Ưu tiên sạc chu kỳ 3 - bắt đầu",
       "charge_first_time_3_end": "Ưu tiên sạc chu kỳ 3 - kết thúc",
       "charge_current": "Dòng sạc",
+      "charge_voltage": "Điện áp sạc ắc quy",
+      "float_voltage": "Điện áp sạc duy trì",
       "discharge_control_type": "Kiểu điều khiển xả",
       "forced_discharge_enable": "Xả cưỡng bức",
       "forced_discharge_power": "Công suất xả cưỡng bức",
