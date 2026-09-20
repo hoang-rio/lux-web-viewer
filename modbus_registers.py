@@ -322,6 +322,26 @@ _ITEMS = [
         "min": 0,
         "max": 140,
     },
+    {
+        "key": "charge_voltage",
+        "category": CATEGORY_CHARGE,
+        "reg": 99,
+        "kind": KIND_NUMBER,
+        "unit": "V",
+        "min": 50,
+        "max": 59,
+        "scale": 0.1,
+    },
+    {
+        "key": "float_voltage",
+        "category": CATEGORY_CHARGE,
+        "reg": 144,
+        "kind": KIND_NUMBER,
+        "unit": "V",
+        "min": 50,
+        "max": 56,
+        "scale": 0.1,
+    },
 
     # ---- Discharge setting ----
     {

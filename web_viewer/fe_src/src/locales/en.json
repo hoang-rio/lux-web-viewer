@@ -352,6 +352,8 @@
       "charge_first_time_3_start": "Charge first period 3 start",
       "charge_first_time_3_end": "Charge first period 3 end",
       "charge_current": "Charge current",
+      "charge_voltage": "Battery charge voltage",
+      "float_voltage": "Float charge voltage",
       "discharge_control_type": "Discharge control type",
       "forced_discharge_enable": "Forced discharge",
       "forced_discharge_power": "Forced discharge power",
