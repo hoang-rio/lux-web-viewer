@@ -26,10 +26,11 @@ export function getActionTypeOptions(castConfigured: boolean): { value: string; 
     { value: 'notification', label: 'triggers.actionNotification' },
     { value: 'tuya_on', label: 'triggers.actionTurnOn' },
     { value: 'tuya_off', label: 'triggers.actionTurnOff' },
+    { value: 'tuya_toggle', label: 'triggers.actionToggle' },
     { value: 'tuya_set', label: 'triggers.actionSetValue' },
   ];
   if (castConfigured) {
-    options.splice(1, 0, { value: 'play_audio', label: 'triggers.actionPlayAudio' });
+    options.push({ value: 'play_audio', label: 'triggers.actionPlayAudio' });
   }
   return options;
 }

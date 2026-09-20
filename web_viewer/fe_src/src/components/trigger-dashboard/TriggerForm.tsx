@@ -418,6 +418,9 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
                       {actionOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>{t(opt.label)}</option>
                       ))}
+                      {!actionOptions.some(o => o.value === action.action_type) && (
+                        <option value={action.action_type}>{action.action_type}</option>
+                      )}
                     </select>
                   </div>
                   {action.action_type === 'notification' ? (
