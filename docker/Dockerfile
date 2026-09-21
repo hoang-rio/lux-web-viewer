@@ -1,4 +1,4 @@
-FROM node:24.15.0-alpine AS fe_builder
+FROM node:24-alpine AS fe_builder
 
 WORKDIR /fe_builder/fe_src
 COPY web_viewer/fe_src/package.json web_viewer/fe_src/yarn.lock* web_viewer/fe_src/.yarnrc.yml ./
