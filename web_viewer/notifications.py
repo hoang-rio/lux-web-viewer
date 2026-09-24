@@ -1,11 +1,24 @@
+import json
+
 from aiohttp.aiohttp import web
 
 from multi_tenant import repository as mt_repo
 from multi_tenant.db import get_db_session
 
 from . import config
+from . import streaming
 from .db import get_db_connection
 from .security import _require_jwt_user_id
+
+
+async def _broadcast_unread_count(user_id=None, unread_count=0):
+    try:
+        data = {"event": "update_unread_count", "data": {"unread_count": unread_count}}
+        if user_id is not None:
+            data["data"]["user_id"] = str(user_id)
+        await streaming.broadcast_sse(json.dumps(data))
+    except Exception as e:
+        config.logger.error(f"Error broadcasting update_unread_count: {e}")
 
 
 async def notification_history(request: web.Request):
@@ -60,7 +73,9 @@ async def mark_notifications_read(request: web.Request):
             session = next(get_db_session())
             try:
                 mt_repo.mark_notifications_read(session, user_id)
+                unread_count = mt_repo.get_unread_notification_count(session, user_id)
                 session.commit()
+                await _broadcast_unread_count(str(user_id), unread_count)
                 return web.json_response({"success": True})
             finally:
                 session.close()
@@ -73,6 +88,10 @@ async def mark_notifications_read(request: web.Request):
         cursor = conn.cursor()
         cursor.execute("UPDATE notification_history SET read = 1 WHERE read = 0")
         conn.commit()
+        unread_count = cursor.execute(
+            "SELECT COUNT(*) FROM notification_history WHERE read = 0"
+        ).fetchone()[0]
+        await _broadcast_unread_count(None, unread_count)
         return web.json_response({"success": True})
     except Exception as e:
         config.logger.error(f"Error in mark_notifications_read: {e}")
@@ -118,6 +137,8 @@ async def delete_notification(request: web.Request):
                 session.commit()
                 if not deleted:
                     return web.json_response({"error": "Notification not found"}, status=404)
+                unread_count = mt_repo.get_unread_notification_count(session, user_id)
+                await _broadcast_unread_count(str(user_id), unread_count)
                 return web.json_response({"success": True})
             finally:
                 session.close()
@@ -133,6 +154,10 @@ async def delete_notification(request: web.Request):
         conn.commit()
         if cursor.rowcount == 0:
             return web.json_response({"error": "Notification not found"}, status=404)
+        unread_count = cursor.execute(
+            "SELECT COUNT(*) FROM notification_history WHERE read = 0"
+        ).fetchone()[0]
+        await _broadcast_unread_count(None, unread_count)
         return web.json_response({"success": True})
     except Exception as e:
         config.logger.error(f"Error in delete_notification: {e}")

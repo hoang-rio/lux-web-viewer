@@ -4,7 +4,6 @@ import "./App.css";
 import {
   IUpdateChart,
   IInverterData,
-  INotificationData,
   IAuthUser,
   IUserInverter,
 } from "./Intefaces";
@@ -61,9 +60,9 @@ function App() {
   const hasInverterDataRef = useRef(false);
   const deviceTimeRef = useRef<string>("");
 
-  // Changed to hold notification object or null
-  const [newNotification, setNewNotification] =
-    useState<INotificationData | null>(null);
+  // Server-authoritative unread notification count (synced via SSE to all devices)
+  const [unreadCountSync, setUnreadCountSync] =
+    useState<{ seq: number; count: number } | null>(null);
 
   const isNoInverterOnboarding = authConfigLoaded && authRequired && !!authUser && userInverters.length === 0;
   const isAuthScreen = authConfigLoaded && authRequired && !authUser;
@@ -103,8 +102,11 @@ function App() {
       return;
     }
     const jsonData = JSON.parse(rawData);
-    if (jsonData.event === "new_notification") {
-      setNewNotification(jsonData.data);
+    if (jsonData.event === "update_unread_count") {
+      setUnreadCountSync((prev) => ({
+        seq: (prev?.seq ?? 0) + 1,
+        count: jsonData.data?.unread_count ?? 0,
+      }));
     } else {
       setIsInitialRealtimeLoading(false);
       hasInverterDataRef.current = true;
@@ -605,7 +607,7 @@ function App() {
         <SystemInformation
           inverterData={inverterData}
           isSSEConnected={isSSEConnected}
-          newNotification={newNotification}
+          unreadCountSync={unreadCountSync}
           inverters={userInverters}
           isOffline={isOfflineByDeviceTime}
           selectedInverterId={selectedInverterId}

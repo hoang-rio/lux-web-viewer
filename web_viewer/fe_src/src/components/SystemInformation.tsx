@@ -18,8 +18,8 @@ const ModbusDashboard = lazy(() => import("./ModbusDashboard"));
 interface Props {
   inverterData: IInverterData;
   isSSEConnected: boolean;
-  // Changed to accept an INotificationData object or null
-  newNotification?: INotificationData | null;
+  // Server-authoritative unread count signal (seq forces effect on repeat)
+  unreadCountSync?: { seq: number; count: number } | null;
   inverters?: IUserInverter[];
   selectedInverterId?: string;
   isOffline: boolean;
@@ -29,7 +29,7 @@ interface Props {
 function SystemInformation({
   inverterData,
   isSSEConnected,
-  newNotification,
+  unreadCountSync,
   inverters = [],
   selectedInverterId = "",
   isOffline,
@@ -135,13 +135,12 @@ function SystemInformation({
     }
   }, [showSettings]);
 
-  // Remove auto-open popover on new notification, just update unread count
+  // Keep the badge in sync with the server-authoritative count pushed via SSE
   useEffect(() => {
-    if (newNotification) {
-      setUnreadCount((prev) => prev + 1);
-      setNotifications((prev) => [newNotification, ...prev]);
+    if (unreadCountSync) {
+      setUnreadCount(unreadCountSync.count);
     }
-  }, [newNotification]);
+  }, [unreadCountSync]);
 
   // Mark notifications as read when popover is closed after being opened
   useEffect(() => {
@@ -181,16 +180,14 @@ function SystemInformation({
         withAuth: true,
       });
       if (res.ok) {
-        const noti = notifications.find(n => n.id === id);
         setNotifications(prev => prev.filter(n => n.id !== id));
-        if (noti && noti.read === 0) {
-          setUnreadCount(prev => Math.max(0, prev - 1));
-        }
+        // The server broadcasts the authoritative unread count; refresh to reconcile
+        fetchUnreadCount();
       }
     } catch (err) {
       logUtil.error('Failed to delete notification', err);
     }
-  }, [notifications, t]);
+  }, [fetchUnreadCount, t]);
 
   const inverterNameById = useMemo(() => {
     return new Map(inverters.map((inv) => [inv.id, inv.name]));

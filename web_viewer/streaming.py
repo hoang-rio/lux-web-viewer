@@ -119,6 +119,7 @@ async def sse_handler(request):
         "response": response,
         "inverter_id": requested_inverter_id,
         "allowed_inverter_ids": allowed_inverter_ids,
+        "user_id": str(user_id) if user_id else None,
     }
     sse_clients.append(sse_client)
     config.logger.debug(f"SSE_CLIENTS count: {len(sse_clients)}")
@@ -160,6 +161,8 @@ async def sse_handler(request):
 async def broadcast_sse(data: str):
     global sse_clients
     inverter_id = None
+    event_user_id = None
+    is_user_scoped = False
     try:
         payload = json.loads(data)
         if "inverter_data" in payload:
@@ -167,8 +170,9 @@ async def broadcast_sse(data: str):
             inverter_id = inverter_payload.get("_inverter_id")
             if not inverter_id:
                 inverter_id = inverter_payload.get("serial") or inverter_payload.get("dongle_serial")
-        elif payload.get("event") == "new_notification":
-            inverter_id = payload.get("data", {}).get("inverter_id")
+        elif payload.get("event") == "update_unread_count":
+            is_user_scoped = True
+            event_user_id = payload.get("data", {}).get("user_id")
 
         if inverter_id:
             inverter_id = str(inverter_id)
@@ -179,13 +183,21 @@ async def broadcast_sse(data: str):
         response = client.get("response")
         if response is None:
             continue
-        scoped_inverter_id = client.get("inverter_id")
-        allowed_inverter_ids = client.get("allowed_inverter_ids")
 
-        if scoped_inverter_id and scoped_inverter_id != inverter_id:
-            continue
-        if allowed_inverter_ids is not None and inverter_id not in allowed_inverter_ids:
-            continue
+        if is_user_scoped:
+            client_user_id = client.get("user_id")
+            if event_user_id is not None:
+                if not client_user_id or str(client_user_id) != str(event_user_id):
+                    continue
+            # event_user_id is None (non-SaaS): broadcast to all connected clients
+        else:
+            scoped_inverter_id = client.get("inverter_id")
+            allowed_inverter_ids = client.get("allowed_inverter_ids")
+
+            if scoped_inverter_id and scoped_inverter_id != inverter_id:
+                continue
+            if allowed_inverter_ids is not None and inverter_id not in allowed_inverter_ids:
+                continue
 
         try:
             await response.write(f"data: {data}\n\n".encode('utf-8'))

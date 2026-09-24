@@ -221,6 +221,7 @@ class FCM():
             inverter_id = (inverter_ctx or {}).get("id")
             user_id = (inverter_ctx or {}).get("user_id")
 
+            unread_count = 0
             if self.__use_pg() and user_id:
                 from multi_tenant.db import get_db_session
                 from multi_tenant import repository as repo
@@ -234,6 +235,7 @@ class FCM():
                         body=body,
                         inverter_id=uuid.UUID(inverter_id) if inverter_id else None,
                     )
+                    unread_count = repo.get_unread_notification_count(session, uuid.UUID(user_id))
                     session.commit()
                 except Exception:
                     session.rollback()
@@ -252,6 +254,8 @@ class FCM():
                     "DELETE FROM notification_history WHERE rowid NOT IN (SELECT rowid FROM notification_history ORDER BY notified_at DESC LIMIT 30)"
                 )
                 conn.commit()
+                cursor.execute("SELECT COUNT(*) FROM notification_history WHERE read = 0")
+                unread_count = cursor.fetchone()[0]
                 cursor.close()
                 conn.close()
 
@@ -259,13 +263,10 @@ class FCM():
                 import asyncio
                 def send_ws():
                     asyncio.run(self.__ws_client.send_json({
-                        "event": "new_notification",
+                        "event": "update_unread_count",
                         "data": {
-                            "title": title,
-                            "body": body,
-                            "notified_at": now_str,
-                            "read": 0,
-                            "inverter_id": inverter_id,
+                            "user_id": user_id,
+                            "unread_count": unread_count,
                         }
                     }))
                 Thread(target=send_ws).start()
