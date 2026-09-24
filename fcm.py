@@ -175,17 +175,18 @@ class FCM():
             )
             conn.commit()
             cursor.close()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM notification_history WHERE read = 0")
+            unread_count = cursor.fetchone()[0]
+            cursor.close()
             conn.close()
             if self.__ws_client is not None:
                 import asyncio
                 def send_ws():
                     asyncio.run(self.__ws_client.send_json({
-                        "event": "new_notification",
+                        "event": "update_unread_count",
                         "data": {
-                            "title": title,
-                            "body": body,
-                            "notified_at": now_str,
-                            "read": 0
+                            "unread_count": unread_count,
                         }
                     }))
                 Thread(target=send_ws).start()

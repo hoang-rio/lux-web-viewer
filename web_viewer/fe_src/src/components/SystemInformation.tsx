@@ -20,8 +20,7 @@ interface Props {
   isSSEConnected: boolean;
   isOffline: boolean;
   onReconnect: () => void;
-  // Changed to accept an INotificationData object or null
-  newNotification?: INotificationData | null;
+  unreadCountSync?: { seq: number; count: number };
 }
 
 function SystemInformation({
@@ -29,7 +28,7 @@ function SystemInformation({
   isSSEConnected,
   isOffline,
   onReconnect,
-  newNotification,
+  unreadCountSync,
 }: Props) {
   const { t, i18n } = useTranslation();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -172,13 +171,12 @@ function SystemInformation({
     }
   }, [showSettings]);
 
-  // Remove auto-open popover on new notification, just update unread count
+  // Sync unread count from server-authoritative SSE event
   useEffect(() => {
-    if (newNotification) {
-      setUnreadCount((prev) => prev + 1);
-      setNotifications((prev) => [newNotification, ...prev]);
+    if (unreadCountSync && unreadCountSync.seq > 0) {
+      setUnreadCount(unreadCountSync.count);
     }
-  }, [newNotification]);
+  }, [unreadCountSync]);
 
   // Mark notifications as read when popover is closed after being opened
   useEffect(() => {
@@ -206,16 +204,13 @@ function SystemInformation({
         method: 'DELETE',
       });
       if (res.ok) {
-        const noti = notifications.find(n => n.id === id);
         setNotifications(prev => prev.filter(n => n.id !== id));
-        if (noti && noti.read === 0) {
-          setUnreadCount(prev => Math.max(0, prev - 1));
-        }
+        fetchUnreadCount();
       }
     } catch (err) {
       logUtil.error('Failed to delete notification', err);
     }
-  }, [notifications, t]);
+  }, [fetchUnreadCount]);
 
   const effectiveSSEConnected = useMemo(() => {
     return isSSEConnected && !isOffline;

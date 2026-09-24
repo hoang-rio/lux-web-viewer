@@ -1,7 +1,19 @@
+import json
+
 from aiohttp.aiohttp import web
 
 from . import config
+from . import streaming
 from .db import get_db_connection
+
+
+async def _broadcast_unread_count(unread_count=0):
+    try:
+        await streaming.broadcast_sse(
+            json.dumps({"event": "update_unread_count", "data": {"unread_count": unread_count}})
+        )
+    except Exception as e:
+        config.logger.error(f"Error broadcasting update_unread_count: {e}")
 
 
 async def notification_history(_: web.Request):
@@ -27,6 +39,10 @@ async def mark_notifications_read(_: web.Request):
         cursor = conn.cursor()
         cursor.execute("UPDATE notification_history SET read = 1 WHERE read = 0")
         conn.commit()
+        unread_count = cursor.execute(
+            "SELECT COUNT(*) FROM notification_history WHERE read = 0"
+        ).fetchone()[0]
+        await _broadcast_unread_count(unread_count)
         return web.json_response({"success": True})
     except Exception as e:
         config.logger.error(f"Error in mark_notifications_read: {e}")
@@ -53,6 +69,10 @@ async def delete_notification(request: web.Request):
         conn.commit()
         if cursor.rowcount == 0:
             return web.json_response({"error": "Notification not found"}, status=404)
+        unread_count = cursor.execute(
+            "SELECT COUNT(*) FROM notification_history WHERE read = 0"
+        ).fetchone()[0]
+        await _broadcast_unread_count(unread_count)
         return web.json_response({"success": True})
     except Exception as e:
         config.logger.error(f"Error in delete_notification: {e}")

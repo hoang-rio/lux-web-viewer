@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, lazy } from "react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
-import { IUpdateChart, IInverterData, INotificationData } from "./Intefaces";
+import { IUpdateChart, IInverterData } from "./Intefaces";
 import Footer from "./components/Footer";
 import Loading from "./components/Loading";
 import * as logUtil from "./utils/logUtil";
@@ -35,9 +35,8 @@ function App() {
   const deviceTimeRef = useRef<string>("");
   const isOfflineByDeviceTimeRef = useRef(false);
 
-  // Changed to hold notification object or null
-  const [newNotification, setNewNotification] =
-    useState<INotificationData | null>(null);
+  const [unreadCountSync, setUnreadCountSync] =
+    useState<{ seq: number; count: number }>({ seq: 0, count: 0 });
 
   const isOfflineByDeviceTime = useMemo(() => {
     const deviceTs = toTimestamp(inverterData?.deviceTime);
@@ -79,8 +78,11 @@ function App() {
 
     eventSource.onmessage = (event) => {
       const jsonData = JSON.parse(event.data);
-      if (jsonData.event === "new_notification") {
-        setNewNotification(jsonData.data);
+      if (jsonData.event === "update_unread_count") {
+        setUnreadCountSync((prev) => ({
+          seq: prev.seq + 1,
+          count: jsonData.data.unread_count,
+        }));
       } else {
         setInverterData(jsonData.inverter_data);
         hourlyChartfRef.current?.updateItem(jsonData.hourly_chart_item);
@@ -193,7 +195,7 @@ function App() {
           isSSEConnected={isSSEConnected}
           isOffline={isOfflineByDeviceTime}
           onReconnect={connectSSE}
-          newNotification={newNotification}
+          unreadCountSync={unreadCountSync}
         />
         <div className="row chart">
           <HourlyChart ref={hourlyChartfRef} className="flex-1 chart-item" />
