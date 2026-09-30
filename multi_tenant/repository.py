@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
 from sqlalchemy import func, select, update
@@ -606,14 +606,24 @@ def insert_notification(
 
 
 def get_notification_history(
-    session: Session, user_id: uuid.UUID, limit: int = 100
+    session: Session,
+    user_id: uuid.UUID,
+    limit: int = 100,
+    day: Optional[date] = None,
+    inverter_id: Optional[uuid.UUID] = None,
 ) -> list[NotificationHistory]:
+    stmt = select(NotificationHistory).where(NotificationHistory.user_id == user_id)
+    if day is not None:
+        start = datetime.combine(day, time.min)
+        stmt = stmt.where(
+            NotificationHistory.notified_at >= start,
+            NotificationHistory.notified_at < start + timedelta(days=1),
+        )
+    if inverter_id is not None:
+        stmt = stmt.where(NotificationHistory.inverter_id == inverter_id)
     return list(
         session.execute(
-            select(NotificationHistory)
-            .where(NotificationHistory.user_id == user_id)
-            .order_by(NotificationHistory.notified_at.desc())
-            .limit(limit)
+            stmt.order_by(NotificationHistory.notified_at.desc()).limit(limit)
         )
         .scalars()
         .all()

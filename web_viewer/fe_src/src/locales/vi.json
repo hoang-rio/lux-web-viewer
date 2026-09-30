@@ -9,7 +9,8 @@
   "consumption": "Tiêu thụ",
   "hourlyChart": {
     "title": "Biểu đồ hàng giờ",
-    "noData": "Không có dữ liệu cho ngày này."
+    "noData": "Không có dữ liệu cho ngày này.",
+    "notifiedAt": "Thông báo lúc"
   },
   "updateChart": "Cập nhật biểu đồ",
   "chartType": "Loại biểu đồ:",

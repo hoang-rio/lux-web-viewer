@@ -98,24 +98,30 @@ function App() {
   }, [i18n, isAuthScreen, isNoInverterOnboarding]);
 
   const handleSSEPayload = useCallback((rawData: string) => {
+    const jsonData = JSON.parse(rawData);
+    if (jsonData.event === "update_unread_count") {
+      // Handled before the document.hidden check: an unread-count update is
+      // cheap and the chart markers should catch up when the tab is restored.
+      const unreadCount = jsonData.data?.unread_count ?? 0;
+      setUnreadCountSync((prev) => ({
+        seq: (prev?.seq ?? 0) + 1,
+        count: unreadCount,
+      }));
+      if (unreadCount > 0) {
+        hourlyChartfRef.current?.refreshNotifications();
+      }
+      return;
+    }
     if (document.hidden) {
       return;
     }
-    const jsonData = JSON.parse(rawData);
-    if (jsonData.event === "update_unread_count") {
-      setUnreadCountSync((prev) => ({
-        seq: (prev?.seq ?? 0) + 1,
-        count: jsonData.data?.unread_count ?? 0,
-      }));
-    } else {
-      setIsInitialRealtimeLoading(false);
-      hasInverterDataRef.current = true;
-      setInverterData(jsonData.inverter_data);
-      if (jsonData.hourly_chart_item) {
-        hourlyChartfRef.current?.updateItem(jsonData.hourly_chart_item);
-      }
-      setIsLoading(false);
+    setIsInitialRealtimeLoading(false);
+    hasInverterDataRef.current = true;
+    setInverterData(jsonData.inverter_data);
+    if (jsonData.hourly_chart_item) {
+      hourlyChartfRef.current?.updateItem(jsonData.hourly_chart_item);
     }
+    setIsLoading(false);
   }, [selectedInverterId]);
 
   useEffect(() => {

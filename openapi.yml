@@ -662,6 +662,25 @@ paths:
       operationId: getNotificationHistory
       tags: [Notifications]
       summary: Get notification history
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: >
+            Date in YYYY-MM-DD format. When omitted the most recent
+            notifications are returned. A malformed value yields an empty list.
+        - name: inverter_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: >
+            Scope to a specific inverter. When omitted the first inverter of the
+            authenticated user is used, matching /hourly-chart.
       responses:
         "200":
           description: Notification history
@@ -683,6 +702,9 @@ paths:
                           type: string
                         notified_at:
                           type: string
+                          description: >
+                            Server-local timestamp formatted as
+                            "YYYY-MM-DD HH:MM:SS".
                         read:
                           type: integer
                         inverter_id:

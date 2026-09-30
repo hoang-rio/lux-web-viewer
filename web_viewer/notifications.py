@@ -1,4 +1,6 @@
 import json
+import re
+from datetime import date
 
 from aiohttp.aiohttp import web
 
@@ -8,7 +10,21 @@ from multi_tenant.db import get_db_session
 from . import config
 from . import streaming
 from .db import get_db_connection
-from .security import _require_jwt_user_id
+from .security import _require_jwt_user_id, _resolve_request_inverter
+
+DATE_PARAM_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_date_param(raw):
+    """Return a parsed date, or None when absent/malformed."""
+    if raw is None or raw == "":
+        return None
+    if not DATE_PARAM_PATTERN.match(raw):
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
 
 
 async def _broadcast_unread_count(user_id=None, unread_count=0):
@@ -22,14 +38,28 @@ async def _broadcast_unread_count(user_id=None, unread_count=0):
 
 
 async def notification_history(request: web.Request):
+    raw_date = request.rel_url.query.get("date")
+    day = _parse_date_param(raw_date)
+    malformed = bool(raw_date) and day is None
+    if malformed:
+        config.logger.warning(f"Ignoring malformed notification history date: {raw_date!r}")
+
     if config.USE_PG:
         user_id, auth_error = _require_jwt_user_id(request)
         if auth_error is not None:
             return auth_error
+        # Checked after auth so an unauthenticated caller always gets a 401.
+        if malformed:
+            return web.json_response({"notifications": []})
         try:
             session = next(get_db_session())
             try:
-                notifications = mt_repo.get_notification_history(session, user_id)
+                inverter = _resolve_request_inverter(session, user_id, request)
+                if inverter is None:
+                    return web.json_response({"notifications": []})
+                notifications = mt_repo.get_notification_history(
+                    session, user_id, day=day, inverter_id=inverter.id
+                )
                 data = [
                     {
                         "id": row.id,
@@ -48,12 +78,24 @@ async def notification_history(request: web.Request):
             config.logger.error(f"Error in notification_history (multi-tenant): {e}")
             return web.json_response({"notifications": []})
 
+    if malformed:
+        return web.json_response({"notifications": []})
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        notifications = cursor.execute(
-            "SELECT id, title, body, notified_at, read FROM notification_history ORDER BY notified_at DESC"
-        ).fetchall()
+        if day:
+            # Single-backend mode stores either "%Y-%m-%d %H:%M:%S" or ISO-8601,
+            # so compare the leading date component instead of the whole value.
+            notifications = cursor.execute(
+                "SELECT id, title, body, notified_at, read FROM notification_history "
+                "WHERE substr(notified_at, 1, 10) = ? ORDER BY notified_at DESC",
+                (day.isoformat(),),
+            ).fetchall()
+        else:
+            notifications = cursor.execute(
+                "SELECT id, title, body, notified_at, read FROM notification_history ORDER BY notified_at DESC"
+            ).fetchall()
         data = [
             {"id": row[0], "title": row[1], "body": row[2], "notified_at": row[3], "read": row[4]}
             for row in notifications
