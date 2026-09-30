@@ -64,6 +64,7 @@ export interface IClassNameProps {
 
 export interface IUpdateChart {
   updateItem: (hourlyItem: never[]) => void;
+  refreshNotifications: () => void;
 }
 
 export interface ITotal {

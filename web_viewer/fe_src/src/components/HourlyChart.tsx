@@ -11,9 +11,10 @@ import {
 } from "react";
 import "./HourlyChart.css";
 import Chart from "react-apexcharts";
-import { IClassNameProps, IUpdateChart, SeriesItem } from "../Intefaces";
+import { IClassNameProps, INotificationData, IUpdateChart, SeriesItem } from "../Intefaces";
 import Loading from "./Loading";
 import { useTranslation } from "react-i18next";
+import { buildNotificationAnnotations } from "./utils";
 
 const HourlyChart = forwardRef(
   ({ className }: IClassNameProps, ref: ForwardedRef<IUpdateChart>) => {
@@ -23,10 +24,12 @@ const HourlyChart = forwardRef(
     const GRID_SERIE_NAME = t("chart.grid");
 
     const [chartData, setChartData] = useState<never[][]>([]);
+    const [notifications, setNotifications] = useState<INotificationData[]>([]);
     const [isDark, setIsDark] = useState(
       window.matchMedia("(prefers-color-scheme: dark)").matches
     );
     const isFetchingRef = useRef<boolean>(false);
+    const isFetchingNotificationsRef = useRef<boolean>(false);
     const [isAutoUpdate, setIsAutoUpdate] = useState(true);
     const [selectedDayStart, setSelectedDayStart] = useState(() => {
       const now = new Date();
@@ -115,9 +118,45 @@ const HourlyChart = forwardRef(
       isFetchingRef.current = false;
     }, []);
 
+    const notificationAnnotations = useMemo(
+      () =>
+        buildNotificationAnnotations(
+          notifications,
+          i18n.t("hourlyChart.notifiedAt")
+        ),
+      [i18n, notifications]
+    );
+
+    const fetchNotifications = useCallback(async (dateStr?: string) => {
+      if (isFetchingNotificationsRef.current) {
+        return;
+      }
+      isFetchingNotificationsRef.current = true;
+      try {
+        const dStr = dateStr || selectedDateRef.current;
+        const res = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/notification-history?date=${dStr}`
+        );
+        const json = await res.json();
+        setNotifications(json.notifications ?? []);
+      } catch (e) {
+        console.error("Failed to fetch notification history", e);
+      } finally {
+        isFetchingNotificationsRef.current = false;
+      }
+    }, []);
+
     useImperativeHandle(
       ref,
       (): IUpdateChart => ({
+        refreshNotifications() {
+          // A new notification can only appear within today's visible range,
+          // so a past date needs no refresh.
+          if (formatLocalDate(new Date()) !== selectedDateRef.current) {
+            return;
+          }
+          fetchNotifications();
+        },
         updateItem(hourlyItem) {
           if (!isAutoUpdate) {
             return;
@@ -184,10 +223,17 @@ const HourlyChart = forwardRef(
           }
           if (shouldFetch) {
             fetchChart(todayStr);
+            fetchNotifications(todayStr);
           }
         }
       }
-    }, [isAutoUpdate, fetchChart, selectedDate, updateMinMaxDateStr]);
+    }, [
+      isAutoUpdate,
+      fetchChart,
+      fetchNotifications,
+      selectedDate,
+      updateMinMaxDateStr,
+    ]);
 
     useEffect(() => {
       document.addEventListener("visibilitychange", onVisibilityChange);
@@ -199,12 +245,13 @@ const HourlyChart = forwardRef(
     useEffect(() => {
       const doInitialAction = async () => {
         await fetchChart();
+        await fetchNotifications();
         updateMinMaxDateStr(); // Also update min/max date on mount
       }
       // Fetch initial chart data when component mounts
       doInitialAction();
       lastDateStrRef.current = formatLocalDate(new Date());
-    }, [fetchChart, updateMinMaxDateStr]);
+    }, [fetchChart, fetchNotifications, updateMinMaxDateStr]);
 
     useEffect(() => {
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -215,9 +262,10 @@ const HourlyChart = forwardRef(
     const toggleAutoUpdate = useCallback(() => {
       if (!isAutoUpdate) {
         fetchChart();
+        fetchNotifications();
       }
       setIsAutoUpdate(!isAutoUpdate);
-    }, [isAutoUpdate, fetchChart]);
+    }, [isAutoUpdate, fetchChart, fetchNotifications]);
 
     return (
       <div className={`card hourly-chart col ${className || ""}`}>
@@ -237,6 +285,7 @@ const HourlyChart = forwardRef(
                 const todayStr = formatLocalDate(new Date());
                 isTodaySelectedRef.current = e.target.value === todayStr;
                 fetchChart(e.target.value);
+                fetchNotifications(e.target.value);
               }}
               style={{ marginRight: 10 }}
             />
@@ -245,7 +294,10 @@ const HourlyChart = forwardRef(
             </button>
             <button
               disabled={!isAutoUpdate}
-              onClick={() => fetchChart(selectedDate)}
+              onClick={() => {
+                fetchChart(selectedDate);
+                fetchNotifications(selectedDate);
+              }}
             >
               {t("updateChart")}
             </button>
@@ -294,6 +346,9 @@ const HourlyChart = forwardRef(
                     datetimeUTC: false,
                     format: "HH:mm",
                   },
+                },
+                annotations: {
+                  points: notificationAnnotations,
                 },
                 yaxis: [
                   {

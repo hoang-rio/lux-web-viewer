@@ -187,6 +187,16 @@ paths:
       operationId: getNotificationHistory
       tags: [Notifications]
       summary: Get notification history
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: >
+            Date in YYYY-MM-DD format. When omitted the most recent
+            notifications are returned. A malformed value yields an empty list.
       responses:
         "200":
           description: Notification history
@@ -208,6 +218,10 @@ paths:
                           type: string
                         notified_at:
                           type: string
+                          description: >
+                            Server-local timestamp. Formatted as
+                            "YYYY-MM-DD HH:MM:SS" or ISO-8601 depending on the
+                            writer; not guaranteed to be RFC 3339.
                         read:
                           type: integer
 

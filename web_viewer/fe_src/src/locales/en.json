@@ -9,7 +9,8 @@
   "consumption": "Consumption",
   "hourlyChart": {
     "title": "Hourly chart",
-    "noData": "No data for this day."
+    "noData": "No data for this day.",
+    "notifiedAt": "Notified at"
   },
   "updateChart": "Update chart",
   "chartType": "Chart type:",

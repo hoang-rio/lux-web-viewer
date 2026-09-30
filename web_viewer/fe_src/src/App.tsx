@@ -83,6 +83,9 @@ function App() {
           seq: prev.seq + 1,
           count: jsonData.data.unread_count,
         }));
+        if (jsonData.data.unread_count > 0) {
+          hourlyChartfRef.current?.refreshNotifications();
+        }
       } else {
         setInverterData(jsonData.inverter_data);
         hourlyChartfRef.current?.updateItem(jsonData.hourly_chart_item);

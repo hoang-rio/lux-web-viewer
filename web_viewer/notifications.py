@@ -1,10 +1,26 @@
 import json
+import re
+from datetime import date
 
 from aiohttp.aiohttp import web
 
 from . import config
 from . import streaming
 from .db import get_db_connection
+
+DATE_PARAM_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_date_param(raw):
+    """Return a normalized YYYY-MM-DD string, or None when absent/malformed."""
+    if raw is None or raw == "":
+        return None
+    if not DATE_PARAM_PATTERN.match(raw):
+        return None
+    try:
+        return date.fromisoformat(raw).isoformat()
+    except ValueError:
+        return None
 
 
 async def _broadcast_unread_count(unread_count=0):
@@ -16,13 +32,27 @@ async def _broadcast_unread_count(unread_count=0):
         config.logger.error(f"Error broadcasting update_unread_count: {e}")
 
 
-async def notification_history(_: web.Request):
+async def notification_history(request: web.Request):
+    raw_date = request.query.get("date")
+    day = _parse_date_param(raw_date)
+    if raw_date and not day:
+        config.logger.warning(f"Ignoring malformed notification history date: {raw_date!r}")
+        return web.json_response({"notifications": []})
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        notifications = cursor.execute(
-            "SELECT id, title, body, notified_at, read FROM notification_history ORDER BY notified_at DESC"
-        ).fetchall()
+        if day:
+            # notified_at is stored as either "%Y-%m-%d %H:%M:%S" or ISO-8601,
+            # so compare the leading date component instead of the whole value.
+            notifications = cursor.execute(
+                "SELECT id, title, body, notified_at, read FROM notification_history "
+                "WHERE substr(notified_at, 1, 10) = ? ORDER BY notified_at DESC",
+                (day,),
+            ).fetchall()
+        else:
+            notifications = cursor.execute(
+                "SELECT id, title, body, notified_at, read FROM notification_history ORDER BY notified_at DESC"
+            ).fetchall()
         data = [
             {"id": row[0], "title": row[1], "body": row[2], "notified_at": row[3], "read": row[4]}
             for row in notifications
