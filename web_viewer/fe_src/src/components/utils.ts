@@ -49,11 +49,14 @@ export function escapeHtml(value: unknown): string {
 }
 
 /**
- * Parses a notification timestamp to epoch milliseconds, treating a
- * space-separated "YYYY-MM-DD HH:mm:ss" value as local wall-clock time.
+ * Parses a server timestamp to epoch milliseconds. Server timestamps are
+ * server-local wall clock in "YYYY-MM-DD HH:mm:ss", a space-separated form
+ * that only ECMAScript-implementation-dependent Date parsing accepts, so it
+ * is normalized to the spec-guaranteed "T" form first. Values written before
+ * the format was normalized (ISO-8601 with microseconds) are also accepted.
  * Returns NaN when the value cannot be parsed.
  */
-export function parseNotificationTimestamp(value: string | number): number {
+export function parseServerTimestamp(value: string | number): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : NaN;
   }
@@ -87,7 +90,7 @@ export function buildNotificationAnnotations(
 ): PointAnnotations[] {
   const byMinute = new Map<number, INotificationData[]>();
   notifications.forEach((notification) => {
-    const timestamp = parseNotificationTimestamp(notification.notified_at);
+    const timestamp = parseServerTimestamp(notification.notified_at);
     if (!Number.isFinite(timestamp)) {
       return;
     }

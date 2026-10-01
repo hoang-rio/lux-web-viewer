@@ -975,16 +975,21 @@ async def main():
         if USE_PG:
             _migrate_sqlite_to_pg_if_needed()
         if config["WORKING_MODE"] == DONGLE_MODE:
-            if run_web_view:
-                db_connection = None
-                if not USE_PG:
-                    db_connection = sqlite3.connect(
-                        config["DB_NAME"]) if "DB_NAME" in config else None
+            db_connection = None
+            if not USE_PG:
+                db_connection = sqlite3.connect(
+                    config["DB_NAME"]) if "DB_NAME" in config else None
+                if db_connection:
+                    # Runs regardless of RUN_WEB_VIEWER: fcm.py opens its own
+                    # connection to write notification_history in every mode,
+                    # so the schema must not wait for the web viewer.
                     from migration import run_migration
                     run_migration(db_connection, logger)
+            else:
+                logger.info("PostgreSQL configured: SQLite runtime storage is disabled")
+            if run_web_view:
+                if not USE_PG:
                     settings.load_settings(db_connection)
-                else:
-                    logger.info("PostgreSQL configured: SQLite runtime storage is disabled")
                 from web_viewer import WebViewer
                 webViewer = WebViewer(logger)
                 webViewer.start()
@@ -1019,16 +1024,21 @@ async def main():
                 await asyncio.sleep(current_sleep_time)
         elif config["WORKING_MODE"] == SERVER_MODE:
             from dongle_server import DongleServer
-            if run_web_view:
-                db_connection = None
-                if not USE_PG:
-                    db_connection = sqlite3.connect(
-                        config["DB_NAME"]) if "DB_NAME" in config else None
+            db_connection = None
+            if not USE_PG:
+                db_connection = sqlite3.connect(
+                    config["DB_NAME"]) if "DB_NAME" in config else None
+                if db_connection:
+                    # Runs regardless of RUN_WEB_VIEWER: fcm.py opens its own
+                    # connection to write notification_history in every mode,
+                    # so the schema must not wait for the web viewer.
                     from migration import run_migration
                     run_migration(db_connection, logger)
+            else:
+                logger.info("PostgreSQL configured: SQLite runtime storage is disabled")
+            if run_web_view:
+                if not USE_PG:
                     settings.load_settings(db_connection)
-                else:
-                    logger.info("PostgreSQL configured: SQLite runtime storage is disabled")
                 from web_viewer import WebViewer
                 webViewer = WebViewer(logger)
                 webViewer.start()

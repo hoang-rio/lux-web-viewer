@@ -15,7 +15,7 @@ import { IClassNameProps, INotificationData, IUpdateChart, SeriesItem } from "..
 import Loading from "./Loading";
 import { useTranslation } from "react-i18next";
 import { apiGetJsonOrThrow } from "../utils/fetchUtil";
-import { buildNotificationAnnotations } from "./utils";
+import { buildNotificationAnnotations, parseServerTimestamp } from "./utils";
 
 interface HourlyChartProps extends IClassNameProps {
   selectedInverterId?: string;
@@ -71,7 +71,9 @@ const HourlyChart = forwardRef(
       const socSeries: SeriesItem[] = [];
 
       chartData.forEach((item) => {
-        const time = new Date(item[1]).getTime();
+        // hourly_chart.datetime is server-local "YYYY-MM-DD HH:mm:ss"; parse it via
+        // the shared helper because Date parsing of the space form is not spec-guaranteed.
+        const time = parseServerTimestamp(item[1]);
         pvSeries.push({ x: time, y: item[2] });
         batterySeries.push({ x: time, y: item[3] });
         gridSeries.push({ x: time, y: item[4] });

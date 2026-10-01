@@ -25,7 +25,15 @@ MIGRATIONS_SQL = [
 def execute_migration_sql(id: int, sql: str, cursor: sqlite3.Cursor) -> None:
     global logger
     logger.info(f"Executing sql: \"{sql}\"")
-    cursor.execute(sql)
+    try:
+        cursor.execute(sql)
+    except sqlite3.OperationalError as e:
+        # Re-running from scratch is now reachable (see run_migration), so an
+        # already-applied ADD COLUMN must not abort the whole sequence.
+        if "duplicate column name" in str(e):
+            logger.info("Column already exists, skipping migration %s", id)
+        else:
+            raise
     cursor.execute(
         "INSERT INTO migration (id, applied_at) VALUES (?, ?)",
         (id, time.time()),
@@ -52,25 +60,30 @@ def run_migration(db_connection: sqlite3.Connection | None = None, _logger: logg
         "SELECT name FROM sqlite_master WHERE type='table' AND name='migration'"
     ).fetchone()
     if has_migration_table is None:
-        logger.info("Start migration")
-        for id, sql in enumerate(MIGRATIONS_SQL, start=1):
-            execute_migration_sql(id, sql, cursor)
-        conn.commit()
+        next_id = 1
     else:
         last_migration = cursor.execute(
             "SELECT id, applied_at FROM migration ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        if last_migration is not None:
-            last_id, _ = last_migration
-            if len(MIGRATIONS_SQL) <= last_id:
-                logger.info("Nothing to migrate")
-                return
-            next_id = last_id + 1
-            logger.info(f"Migrating since {next_id}")
-            pending_migrations = MIGRATIONS_SQL[last_id:]
-            for id, sql in enumerate(pending_migrations, start=next_id):
-                execute_migration_sql(id, sql, cursor)
-            conn.commit()
+        # An existing but empty migration table means the tracking rows were
+        # never committed (DDL auto-commits, so a crash between the first
+        # CREATE TABLE and the first INSERT leaves exactly this state).
+        # Treat it as "nothing applied" instead of silently doing nothing.
+        next_id = last_migration[0] + 1 if last_migration is not None else 1
+        if last_migration is None:
+            logger.warning(
+                "Migration table exists but is empty; "
+                "rebuilding schema from the first migration"
+            )
+    if len(MIGRATIONS_SQL) < next_id:
+        logger.info("Nothing to migrate")
+        cursor.close()
+        return
+    logger.info(f"Migrating since {next_id}")
+    pending_migrations = MIGRATIONS_SQL[next_id - 1:]
+    for id, sql in enumerate(pending_migrations, start=next_id):
+        execute_migration_sql(id, sql, cursor)
+    conn.commit()
     cursor.close()
 
 if __name__ == '__main__':
