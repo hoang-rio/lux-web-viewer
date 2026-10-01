@@ -4,6 +4,7 @@ from aiohttp.aiohttp import web
 
 from . import config
 from .db import dict_factory, get_db_connection
+from time_utils import format_datetime
 
 
 async def hourly_chart(request: web.Request):
@@ -22,7 +23,7 @@ async def hourly_chart(request: web.Request):
         end_of_day = start_of_day + timedelta(days=1)
         hourly_chart = cursor.execute(
             "SELECT * FROM hourly_chart WHERE datetime >= ? AND datetime < ?",
-            (start_of_day.strftime("%Y-%m-%d %H:%M:%S"), end_of_day.strftime("%Y-%m-%d %H:%M:%S"))
+            (format_datetime(start_of_day), format_datetime(end_of_day))
         ).fetchall()
         return web.json_response(hourly_chart)
     except Exception as e:

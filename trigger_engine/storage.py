@@ -5,13 +5,15 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from time_utils import format_datetime
+
 logger = logging.getLogger("trigger_engine")
 
 
 def _update_last_triggered(trigger_id: int, now: datetime, db_conn) -> None:
     db_conn.execute(
         "UPDATE automation_triggers SET last_triggered_at = ? WHERE id = ?",
-        (now.isoformat(), trigger_id),
+        (format_datetime(now), trigger_id),
     )
     db_conn.commit()
 
@@ -100,7 +102,7 @@ def save_trigger(data: dict, db_conn) -> dict:
                 data["name"], enabled, data.get("when_start_time"), data.get("when_end_time"),
                 data.get("when_days"), conditions_json, action_type,
                 action_device_id, action_params_json,
-                data.get("cooldown_seconds", 300), datetime.now().isoformat(),
+                data.get("cooldown_seconds", 300), format_datetime(),
             ),
         )
         trigger_id = cursor.lastrowid
@@ -119,7 +121,7 @@ def add_trigger_history(trigger_id: int, status: str, message: str, db_conn, act
     """Save trigger execution history. Keeps max 10 records per trigger."""
     db_conn.execute(
         "INSERT INTO trigger_history (trigger_id, triggered_at, status, message, actions_detail) VALUES (?, ?, ?, ?, ?)",
-        (trigger_id, datetime.now().isoformat(), status, message, actions_detail),
+        (trigger_id, format_datetime(), status, message, actions_detail),
     )
     # Keep only latest 10 per trigger
     db_conn.execute(

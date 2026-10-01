@@ -1,10 +1,10 @@
 import asyncio
 import logging
 import time
-from datetime import datetime
 from typing import Optional
 import dongle_handler
 import modbus_service
+from time_utils import format_datetime
 
 SERVER_REQUEST_FUNCTIONS = (0x03, 0x04, 0x06, 0x10)
 # Read function codes are idempotent, so a request that times out can be
@@ -480,9 +480,7 @@ class DongleServer:
                                 if all_mode_received_registers.issuperset(set(registers)):
                                     # Always update the timestamp to now for the returned data
                                     self.__inverter_data = dict(self.__cached_data)
-                                    self.__inverter_data['deviceTime'] = datetime.now().strftime(
-                                        "%Y-%m-%d %H:%M:%S"
-                                    )
+                                    self.__inverter_data['deviceTime'] = format_datetime()
                                     self.__data_received_event.set()
                                     self.__logger.info(
                                         "ReadInput complete (all) from %s (soc=%s%%, p_pv=%sW)",
@@ -585,9 +583,7 @@ class DongleServer:
             
             if parsed_data is not None:
                 # Add device timestamp
-                parsed_data['deviceTime'] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                parsed_data['deviceTime'] = format_datetime()
 
                 # Log parsed type + a handful of key metrics specific to the register block type
                 if parsed_data.get("input_type") == "all":
@@ -661,9 +657,7 @@ class DongleServer:
                 if data_len == 117 and register == 0:
                     parsed_data = dongle_handler.Dongle.read_input1(data)
                     if parsed_data is not None:
-                        parsed_data['deviceTime'] = datetime.now().strftime(
-                            "%Y-%m-%d %H:%M:%S"
-                        )
+                        parsed_data['deviceTime'] = format_datetime()
                         self.__logger.info(
                             "Parsed data using ReadInput1 fallback"
                         )

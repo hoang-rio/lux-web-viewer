@@ -84,7 +84,8 @@ export interface INotificationData {
   id: number;
   title: string;
   body: string;
-  notified_at: string | number;
+  /** Server-local wall clock as "YYYY-MM-DD HH:mm:ss". */
+  notified_at: string;
   read: number;
 }
 
@@ -147,7 +148,9 @@ export interface ITrigger {
   action_device_id: string | null;
   action_params: ITriggerActionParams | null;
   cooldown_seconds: number;
+  /** Server-local wall clock as "YYYY-MM-DD HH:mm:ss". */
   last_triggered_at: string | null;
+  /** Server-local wall clock as "YYYY-MM-DD HH:mm:ss". */
   created_at: string;
 }
 
@@ -181,6 +184,7 @@ export interface IDeviceMapping {
 export interface ITriggerHistory {
   id: number;
   trigger_id: number;
+  /** Server-local wall clock as "YYYY-MM-DD HH:mm:ss". */
   triggered_at: string;
   status: string;
   message: string;

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { ITrigger, ITriggerCondition, ITriggerAction, ITuyaDevice, IDeviceMapping, ITriggerHistory } from '../../Intefaces';
 import { INVERTER_FIELDS, formatDays, resolveActions } from './constants';
+import { formatServerTimestamp } from '../utils';
 
 interface TriggersTabProps {
   triggers: ITrigger[];
@@ -164,7 +165,7 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
                 </div>
                 {tr.last_triggered_at && (
                   <div className="trigger-detail">
-                    <strong>{t('triggers.lastTriggered')}:</strong> {new Date(tr.last_triggered_at).toLocaleString()}
+                    <strong>{t('triggers.lastTriggered')}:</strong> {formatServerTimestamp(tr.last_triggered_at)}
                   </div>
                 )}
               </div>
@@ -186,7 +187,7 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
                     <div className="trigger-history-list">
                       {triggerHistory.map((h) => (
                         <div key={h.id} className={`trigger-history-item ${h.status}`}>
-                          <span className="history-time">{new Date(h.triggered_at).toLocaleString()}</span>
+                          <span className="history-time">{formatServerTimestamp(h.triggered_at)}</span>
                           <span className={`history-status ${h.status}`}>{h.status === 'success' ? '✓' : '✗'}</span>
                           <span className="history-message">{renderActionsDetail(h.actions_detail || '', h.message)}</span>
                         </div>

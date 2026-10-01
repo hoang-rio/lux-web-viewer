@@ -16,6 +16,7 @@ import settings
 import database
 import trigger_engine
 import modbus_controller
+from time_utils import format_datetime
 
 DONGLE_MODE = "DONGLE"
 SERVER_MODE = "SERVER"
@@ -91,7 +92,7 @@ def dectect_abnormal_usage(db_connection: sqlite3.Connection, fcm_service: FCM):
         cursor.row_factory = dict_factory
         all_items = cursor.execute(
             "SELECT * FROM hourly_chart WHERE datetime >= ? AND datetime < ?",
-            (abnormal_check_start_time.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S"))
+            (format_datetime(abnormal_check_start_time), format_datetime(now))
         ).fetchall()
         abnormnal_count = 0
         normnal_count = 0
@@ -113,8 +114,8 @@ def dectect_abnormal_usage(db_connection: sqlite3.Connection, fcm_service: FCM):
         if max_power >= abnormal_min_power and max_power > min_power and abnormnal_count > abnormal_usage_count and normnal_count > normal_min_usage_count and normnal_count < abnormnal_count:
             logger.warning(
                 "_________Abnormal usage detected from %s to %s with %s abnormal times and %s normal times (max_power: %s, min_power: %s)_________",
-                abnormal_check_start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                now.strftime("%Y-%m-%d %H:%M:%S"),
+                format_datetime(abnormal_check_start_time),
+                format_datetime(now),
                 abnormnal_count,
                 normnal_count,
                 max_power,
@@ -128,8 +129,8 @@ def dectect_abnormal_usage(db_connection: sqlite3.Connection, fcm_service: FCM):
         else:
             logger.info(
                 "_________No abnormal usage detected from %s to %s with %s abnormal times and %s normal times (max_power: %s, min_power: %s)_________",
-                abnormal_check_start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                now.strftime("%Y-%m-%d %H:%M:%S"),
+                format_datetime(abnormal_check_start_time),
+                format_datetime(now),
                 abnormnal_count,
                 normnal_count,
                 max_power,
@@ -217,9 +218,9 @@ async def handle_grid_status(json_data: dict, fcm_service: FCM, db_connection: s
             last_grid_connected = f.read() == "True"
         if not last_grid_connected:
             # Only get disconneced time from state file if disconnected from previos
-            disconnected_time = datetime.fromtimestamp(
-                path.getmtime(config['STATE_FILE'])
-            ).strftime("%Y-%m-%d %H:%M:%S")
+            disconnected_time = format_datetime(
+                datetime.fromtimestamp(path.getmtime(config['STATE_FILE']))
+            )
     status_text = json_data["status_text"] if "status_text" in json_data else json_data["status"]
     if not is_grid_connected:
         logger.warning(
@@ -293,11 +294,15 @@ async def main():
         trigger_engine.set_player(play_audio_thread)
         run_web_view = config["RUN_WEB_VIEWER"] == "True"
         if config["WORKING_MODE"] == DONGLE_MODE:
-            if run_web_view:
-                db_connection = sqlite3.connect(
-                    config["DB_NAME"]) if "DB_NAME" in config else None
+            db_connection = sqlite3.connect(
+                config["DB_NAME"]) if "DB_NAME" in config else None
+            if db_connection:
+                # Runs regardless of RUN_WEB_VIEWER: handle_grid_status writes
+                # notification_history in every mode, so the schema and the
+                # timestamp normalization must not wait for the web viewer.
                 from migration import run_migration
                 run_migration(db_connection, logger)
+            if run_web_view:
                 settings.load_settings(db_connection)
                 from web_viewer import WebViewer
                 webViewer = WebViewer(logger)
@@ -343,11 +348,15 @@ async def main():
                 await asyncio.sleep(int(config["SLEEP_TIME"]))
         elif config["WORKING_MODE"] == SERVER_MODE:
             from dongle_server import DongleServer
-            if run_web_view:
-                db_connection = sqlite3.connect(
-                    config["DB_NAME"]) if "DB_NAME" in config else None
+            db_connection = sqlite3.connect(
+                config["DB_NAME"]) if "DB_NAME" in config else None
+            if db_connection:
+                # Runs regardless of RUN_WEB_VIEWER: handle_grid_status writes
+                # notification_history in every mode, so the schema and the
+                # timestamp normalization must not wait for the web viewer.
                 from migration import run_migration
                 run_migration(db_connection, logger)
+            if run_web_view:
                 settings.load_settings(db_connection)
                 from web_viewer import WebViewer
                 webViewer = WebViewer(logger)

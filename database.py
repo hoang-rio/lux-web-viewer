@@ -1,6 +1,8 @@
 import sqlite3
 from datetime import datetime, timedelta
 
+from time_utils import DATETIME_FORMAT, format_datetime
+
 
 def insert_hourly_chart(db_connection: sqlite3.Connection, inverter_data: dict, sleep_time: int):
     """
@@ -15,11 +17,11 @@ def insert_hourly_chart(db_connection: sqlite3.Connection, inverter_data: dict, 
         List with chart item data [id, datetime, pv, battery, grid, consumption, soc]
     """
     cursor = db_connection.cursor()
-    device_time = datetime.strptime(inverter_data["deviceTime"], "%Y-%m-%d %H:%M:%S")
+    device_time = datetime.strptime(inverter_data["deviceTime"], DATETIME_FORMAT)
     # Remove hourly_chart records older than 30 days
     oldest_date = (device_time - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
     cursor.execute(
-        "DELETE FROM hourly_chart WHERE datetime < ?", (oldest_date.strftime("%Y-%m-%d %H:%M:%S"),))
+        "DELETE FROM hourly_chart WHERE datetime < ?", (format_datetime(oldest_date),))
     item_id = device_time.strftime("%Y%m%d%H%M")
     grid = inverter_data["p_to_grid"] - inverter_data["p_to_user"]
     consumption = inverter_data["p_inv"] + \
@@ -78,8 +80,7 @@ def insert_daily_chart(db_connection: sqlite3.Connection, inverter_data: dict):
         db_connection: SQLite database connection
         inverter_data: Dictionary containing inverter data
     """
-    device_time = datetime.strptime(inverter_data["deviceTime"],
-                                    "%Y-%m-%d %H:%M:%S")
+    device_time = datetime.strptime(inverter_data["deviceTime"], DATETIME_FORMAT)
     if device_time.hour == 0 and device_time.minute == 0:
         # Igore daily data in first minute of the day
         return
@@ -102,7 +103,7 @@ def insert_daily_chart(db_connection: sqlite3.Connection, inverter_data: dict):
         "grid_import": inverter_data["e_to_user_day"],
         "grid_export": inverter_data["e_to_grid_day"],
         "consumption": round(consumption, 1),
-        "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "updated": format_datetime()
     }
     is_exist = cursor.execute(
         "SELECT id, consumption FROM daily_chart WHERE id = ?", (item_id,)

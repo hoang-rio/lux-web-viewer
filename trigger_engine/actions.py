@@ -1,11 +1,11 @@
 """Trigger action execution: Tuya controls, FCM notifications, audio playback."""
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 import tuya_manager
 from play_audio import PlayAudio
+from time_utils import format_datetime
 
 from . import constants
 from . import state
@@ -138,7 +138,7 @@ def _send_notification(trigger: dict, params: Optional[dict], db_conn, inverter_
     try:
         db_conn.execute(
             "INSERT INTO notification_history (notified_at, title, body) VALUES (?, ?, ?)",
-            (datetime.now().isoformat(), title, body),
+            (format_datetime(), title, body),
         )
         db_conn.commit()
     except Exception:

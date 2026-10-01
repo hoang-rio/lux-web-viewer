@@ -218,10 +218,13 @@ paths:
                           type: string
                         notified_at:
                           type: string
+                          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+                          example: "2026-09-30 14:23:05"
                           description: >
-                            Server-local timestamp. Formatted as
-                            "YYYY-MM-DD HH:MM:SS" or ISO-8601 depending on the
-                            writer; not guaranteed to be RFC 3339.
+                            Server-local wall-clock timestamp, always formatted as
+                            "YYYY-MM-DD HH:MM:SS". Space-separated and not RFC 3339,
+                            but fixed-width so lexical order matches chronological
+                            order.
                         read:
                           type: integer
 
@@ -859,6 +862,11 @@ paths:
                           type: integer
                         triggered_at:
                           type: string
+                          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+                          example: "2026-09-30 14:23:05"
+                          description: >
+                            Server-local wall-clock timestamp, formatted as
+                            "YYYY-MM-DD HH:MM:SS".
                         status:
                           type: string
                         message:
@@ -1087,6 +1095,11 @@ components:
           type: string
         created_at:
           type: string
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+          example: "2026-09-30 14:23:05"
+          description: >
+            Server-local wall-clock timestamp, formatted as
+            "YYYY-MM-DD HH:MM:SS".
 
     ModbusStatus:
       type: object
@@ -1212,9 +1225,19 @@ components:
         last_triggered_at:
           type: string
           nullable: true
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+          example: "2026-09-30 14:23:05"
+          description: >
+            Server-local wall-clock timestamp, formatted as
+            "YYYY-MM-DD HH:MM:SS".
         created_at:
           type: string
           nullable: true
+          pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+          example: "2026-09-30 14:23:05"
+          description: >
+            Server-local wall-clock timestamp, formatted as
+            "YYYY-MM-DD HH:MM:SS".
 
     TriggerCondition:
       type: object

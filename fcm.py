@@ -7,6 +7,7 @@ from threading import Thread
 import sqlite3
 
 from api_storage import load_device_tokens, save_device_tokens
+from time_utils import format_datetime
 from web_socket_client import WebSocketClient
 
 SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"]
@@ -160,10 +161,9 @@ class FCM():
 
     def __log_notification(self, title: str, body: str):
         try:
-            from datetime import datetime
             conn = sqlite3.connect(self.__config["DB_NAME"])
             cursor = conn.cursor()
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now_str = format_datetime()
             cursor.execute(
                 "INSERT INTO notification_history (notified_at, title, body) VALUES (?, ?, ?)",
                 (now_str, title, body)

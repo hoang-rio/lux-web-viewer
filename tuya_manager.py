@@ -5,10 +5,10 @@ import os
 import sqlite3
 import threading
 import time
-from datetime import datetime
 from typing import Optional
 
 import tinytuya
+from time_utils import format_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,7 @@ def add_device(device_cfg: dict, db_conn: sqlite3.Connection) -> dict:
             device_cfg["local_key"],
             device_cfg.get("protocol_version", "3.3"),
             device_cfg.get("device_type", "outlet"),
-            datetime.now().isoformat(),
+            format_datetime(),
         ),
     )
     db_conn.commit()

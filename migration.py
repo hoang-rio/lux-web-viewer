@@ -24,7 +24,20 @@ MIGRATIONS_SQL = [
     "CREATE TABLE IF NOT EXISTS tuya_devices (id TEXT PRIMARY KEY, name TEXT NOT NULL, ip TEXT NOT NULL, local_key TEXT NOT NULL, protocol_version TEXT NOT NULL DEFAULT '3.3', device_type TEXT NOT NULL DEFAULT 'outlet', created_at TEXT)",
     "CREATE TABLE IF NOT EXISTS automation_triggers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, when_start_time TEXT, when_end_time TEXT, when_days TEXT, conditions TEXT NOT NULL DEFAULT '[]', action_type TEXT NOT NULL, action_device_id TEXT, action_params TEXT, cooldown_seconds INTEGER NOT NULL DEFAULT 300, last_triggered_at TEXT, created_at TEXT, FOREIGN KEY (action_device_id) REFERENCES tuya_devices(id))",
     "CREATE TABLE IF NOT EXISTS trigger_history (id INTEGER PRIMARY KEY AUTOINCREMENT, trigger_id INTEGER NOT NULL, triggered_at TEXT NOT NULL, status TEXT DEFAULT 'success', message TEXT, FOREIGN KEY (trigger_id) REFERENCES automation_triggers(id) ON DELETE CASCADE)",
-    "ALTER TABLE trigger_history ADD COLUMN actions_detail TEXT"
+    "ALTER TABLE trigger_history ADD COLUMN actions_detail TEXT",
+    # trigger_engine/actions.py used to write notified_at as datetime.now().isoformat()
+    # ("YYYY-MM-DDTHH:MM:SS.ffffff") while fcm.py wrote "%Y-%m-%d %H:%M:%S". The two
+    # formats do not sort against each other as strings ('T' > ' '), so ORDER BY
+    # notified_at mixed old and new rows incorrectly. Rewrite the ISO rows in place.
+    "UPDATE notification_history SET notified_at = replace(substr(notified_at, 1, 19), 'T', ' ') WHERE notified_at LIKE '%T%'",
+    # Same problem in trigger_engine: storage.py wrote these as
+    # datetime.now().isoformat() ("YYYY-MM-DDTHH:MM:SS.ffffff") while the rest of
+    # the database uses "%Y-%m-%d %H:%M:%S". Rewrite the ISO rows in place so
+    # "ORDER BY triggered_at DESC" and the per-trigger history trim stay correct.
+    "UPDATE trigger_history SET triggered_at = replace(substr(triggered_at, 1, 19), 'T', ' ') WHERE triggered_at LIKE '%T%'",
+    "UPDATE automation_triggers SET last_triggered_at = replace(substr(last_triggered_at, 1, 19), 'T', ' ') WHERE last_triggered_at LIKE '%T%'",
+    "UPDATE automation_triggers SET created_at = replace(substr(created_at, 1, 19), 'T', ' ') WHERE created_at LIKE '%T%'",
+    "UPDATE tuya_devices SET created_at = replace(substr(created_at, 1, 19), 'T', ' ') WHERE created_at LIKE '%T%'"
 ]
 def execute_migration_sql(id: int, sql: str, cursor: sqlite3.Cursor) -> None:
     global logger
@@ -62,25 +75,30 @@ def run_migration(db_connection: sqlite3.Connection | None = None, _logger: logg
         "SELECT name FROM sqlite_master WHERE type='table' AND name='migration'"
     ).fetchone()
     if has_migration_table is None:
-        logger.info("Start migration")
-        for id, sql in enumerate(MIGRATIONS_SQL, start=1):
-            execute_migration_sql(id, sql, cursor)
-        conn.commit()
+        next_id = 1
     else:
         last_migration = cursor.execute(
             "SELECT id, applied_at FROM migration ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        if last_migration is not None:
-            last_id, _ = last_migration
-            if len(MIGRATIONS_SQL) <= last_id:
-                logger.info("Nothing to migrate")
-                return
-            next_id = last_id + 1
-            logger.info(f"Migrating since {next_id}")
-            pending_migrations = MIGRATIONS_SQL[last_id:]
-            for id, sql in enumerate(pending_migrations, start=next_id):
-                execute_migration_sql(id, sql, cursor)
-            conn.commit()
+        # An existing but empty migration table means the tracking rows were
+        # never committed (DDL auto-commits, so a crash between the first
+        # CREATE TABLE and the first INSERT leaves exactly this state).
+        # Treat it as "nothing applied" instead of silently doing nothing.
+        next_id = last_migration[0] + 1 if last_migration is not None else 1
+        if last_migration is None:
+            logger.warning(
+                "Migration table exists but is empty; "
+                "rebuilding schema from the first migration"
+            )
+    if len(MIGRATIONS_SQL) < next_id:
+        logger.info("Nothing to migrate")
+        cursor.close()
+        return
+    logger.info(f"Migrating since {next_id}")
+    pending_migrations = MIGRATIONS_SQL[next_id - 1:]
+    for id, sql in enumerate(pending_migrations, start=next_id):
+        execute_migration_sql(id, sql, cursor)
+    conn.commit()
     cursor.close()
 
 if __name__ == '__main__':

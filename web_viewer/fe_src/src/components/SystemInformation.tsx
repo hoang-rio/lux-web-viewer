@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import Loading from "./Loading";
 import * as logUtil from "../utils/logUtil";
+import { formatServerTimestamp } from "./utils";
 
 const SettingsPopover = lazy(() => import("./SettingsPopover"));
 const TriggerDashboard = lazy(() => import("./TriggerDashboard"));
@@ -47,8 +48,7 @@ function SystemInformation({
 
   // Added helper function to format datetime
   const formatDateTime = useCallback((dateInput: string | number) => {
-    const date = new Date(dateInput);
-    return date.toLocaleString();
+    return formatServerTimestamp(dateInput);
   }, []);
 
   // Fetch unread notification count on mount and when page becomes visible

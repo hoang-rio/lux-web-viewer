@@ -42,8 +42,10 @@ async def notification_history(request: web.Request):
         conn = get_db_connection()
         cursor = conn.cursor()
         if day:
-            # notified_at is stored as either "%Y-%m-%d %H:%M:%S" or ISO-8601,
-            # so compare the leading date component instead of the whole value.
+            # notified_at is a fixed-width "%Y-%m-%d %H:%M:%S" string, so the
+            # leading 10 characters are exactly the date. Comparing only that
+            # part also keeps rows written before the format was normalized
+            # ("YYYY-MM-DDTHH:MM:SS.ffffff") filterable by date.
             notifications = cursor.execute(
                 "SELECT id, title, body, notified_at, read FROM notification_history "
                 "WHERE substr(notified_at, 1, 10) = ? ORDER BY notified_at DESC",

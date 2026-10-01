@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, time as dtime
 
 import tuya_manager
+from time_utils import parse_datetime
 
 from . import constants
 
@@ -151,12 +152,11 @@ def _compare(actual, op: str, expected) -> bool:
 
 def _check_cooldown(trigger: dict, now: datetime) -> bool:
     """Check if enough time has passed since last trigger."""
-    last_str = trigger.get("last_triggered_at")
-    if not last_str:
+    last = parse_datetime(trigger.get("last_triggered_at"))
+    if last is None:
         return True
+    cooldown = trigger.get("cooldown_seconds", 300)
     try:
-        last = datetime.fromisoformat(last_str)
-        cooldown = trigger.get("cooldown_seconds", 300)
         return (now - last).total_seconds() >= cooldown
-    except (ValueError, TypeError):
+    except TypeError:
         return True

@@ -1,9 +1,9 @@
 
 from socket import socket
 import socket_client
-from datetime import datetime
 import logging
 from typing_extensions import Optional
+from time_utils import format_datetime
 
 STATUS_MAP: dict = {
     0: "idle / standby",
@@ -188,9 +188,7 @@ class Dongle():
             if self.__cached_data:
                 # Always update the timestamp to now for the returned data
                 result = dict(self.__cached_data)
-                result['deviceTime'] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                result['deviceTime'] = format_datetime()
                 self.__logger.info(
                     "Finish get dongle input (soc=%s%%, p_pv=%sW)",
                     result.get("soc", "?"),
