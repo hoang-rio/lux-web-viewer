@@ -6,7 +6,7 @@ import modbus_registers as m
 class TestCatalogSpec(unittest.TestCase):
     def test_length_and_uniqueness(self):
         items = m.all_items()
-        self.assertEqual(len(items), 62)
+        self.assertEqual(len(items), 66)
         keys = [it["key"] for it in items]
         self.assertEqual(len(set(keys)), len(keys))
         by_reg = {}
@@ -65,6 +65,23 @@ class TestCatalogSpec(unittest.TestCase):
         charge_items = m.get_items("charge")
         self.assertTrue(all(it["category"] == "charge" for it in charge_items))
         self.assertGreater(len(charge_items), 0)
+
+    def test_ac_charge_start_end_thresholds(self):
+        """AC charge start/end voltage (158/159) and SOC (160/161) live in Charge."""
+        expected = {
+            "ac_charge_start_voltage": (158, "V", 0.1),
+            "ac_charge_end_voltage": (159, "V", 0.1),
+            "ac_charge_start_soc": (160, "%", None),
+            "ac_charge_end_soc": (161, "%", None),
+        }
+        for key, (reg, unit, scale) in expected.items():
+            item = m.get_item(key)
+            self.assertIsNotNone(item, key)
+            self.assertEqual(item["category"], "charge")
+            self.assertEqual(item["kind"], "number")
+            self.assertEqual(item["reg"], reg)
+            self.assertEqual(item["unit"], unit)
+            self.assertEqual(item.get("scale"), scale)
 
 
 class TestExtract(unittest.TestCase):
