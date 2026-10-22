@@ -394,10 +394,11 @@ const HourlyChart = forwardRef(
                   },
                   y: {
                     formatter(val, opts) {
+                      const disVal = val ?? 0;
                       if (opts?.seriesIndex === 4) {
-                        return `${val}%`;
+                        return `${disVal}%`;
                       }
-                      return `${Math.abs(val)} W`;
+                      return `${Math.abs(disVal)} W`;
                     },
                     title: {
                       formatter(seriesName, opts) {
