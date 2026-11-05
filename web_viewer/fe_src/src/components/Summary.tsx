@@ -6,6 +6,7 @@ import DisplayYield from "./DisplayYield";
 import YieldChart from "./YieldChart";
 import { formatTotalValue } from "./utils";
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import * as logUtil from "../utils/logUtil";
 import { apiGetJsonOrThrow } from "../utils/fetchUtil";
 
@@ -20,7 +21,7 @@ enum YieldDisplay {
   CHART_TOTAL,
 }
 function Summary({ invertData, selectedInverterId, authToken }: IProps) {
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   const [isShowCharged, setIsShowCharged] = useState(false);
   const [isShowFeed, setIsShowFeed] = useState(false);
   const isFetchingRef = useRef(false);
@@ -86,7 +87,7 @@ function Summary({ invertData, selectedInverterId, authToken }: IProps) {
     } finally {
       isFetchingRef.current = false;
     }
-  }, [authToken, i18n, selectedInverterId]);
+  }, [authToken, selectedInverterId]);
 
   const onVisibilityChange = useCallback(() => {
     if (!document.hidden) {

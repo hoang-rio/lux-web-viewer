@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { IModbusCategory, IModbusItem, IModbusStatus } from '../Intefaces';
 import { apiFetch } from '../utils/fetchUtil';
 import Loading from './Loading';
@@ -52,18 +53,18 @@ const ModbusDashboard = ({ onClose, inverterId }: ModbusDashboardProps) => {
         setReadState('success');
       } else {
         setReadState('error');
-        setMessage({ text: readData.message || t('modbus.readFailed'), type: 'error' });
+        setMessage({ text: readData.message || i18n.t('modbus.readFailed'), type: 'error' });
       }
       if (readData.status) setStatus(readData.status);
     } catch (err) {
       logUtil.error('Failed to fetch modbus registers', err);
       setReadState('error');
-      setMessage({ text: t('modbus.loadFailed'), type: 'error' });
+      setMessage({ text: i18n.t('modbus.loadFailed'), type: 'error' });
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inverterQuery, t]);
+  }, [inverterQuery]);
 
   useEffect(() => {
     fetchAll();

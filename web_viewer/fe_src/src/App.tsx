@@ -11,6 +11,10 @@ import Footer from "./components/Footer";
 import Loading from "./components/Loading";
 import * as logUtil from "./utils/logUtil";
 import { apiFetch, apiGetJsonOrThrow } from "./utils/fetchUtil";
+// Use the i18n singleton (not the hook's proxied instance) inside callbacks and
+// effects: react-i18next returns a new object identity on every language change,
+// which would otherwise re-create these callbacks and re-run data/SSE effects.
+import i18n from "./i18n";
 
 const SystemInformation = lazy(() => import("./components/SystemInformation"));
 const Summary = lazy(() => import("./components/Summary"));
@@ -38,7 +42,7 @@ function toTimestamp(value?: string | null): number {
 }
 
 function App() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [inverterData, setInverterData] = useState<IInverterData>();
   const [authUser, setAuthUser] = useState<IAuthUser | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
@@ -89,13 +93,13 @@ function App() {
     if (currentDeviceTime) {
       document.title = `[${currentDeviceTime}] ${i18n.t("webTitle")}`;
     }
-  }, [i18n]);
+  }, []);
 
   const setOfflineTitle = useCallback(() => {
     if (!isNoInverterOnboarding && !isAuthScreen) {
       document.title = `[${i18n.t("offline")}] ${i18n.t("webTitle")}`;
     }
-  }, [i18n, isAuthScreen, isNoInverterOnboarding]);
+  }, [isAuthScreen, isNoInverterOnboarding]);
 
   const handleSSEPayload = useCallback((rawData: string) => {
     const jsonData = JSON.parse(rawData);
@@ -163,7 +167,7 @@ function App() {
         reconnect();
       }
     }, delayMs);
-  }, [i18n]);
+  }, []);
 
   const connectSSE = useCallback(() => {
     if (!authSessionReady) {
@@ -271,7 +275,7 @@ function App() {
         scheduleSSEReconnect(connectSSE);
       }
     })();
-  }, [authRequired, authSessionReady, authUser, handleSSEPayload, i18n, scheduleSSEReconnect, selectedInverterId, setConnectedTitle, setOfflineTitle, useBearerAuth]);
+  }, [authRequired, authSessionReady, authUser, handleSSEPayload, scheduleSSEReconnect, selectedInverterId, setConnectedTitle, setOfflineTitle, useBearerAuth]);
 
   const closeSSE = useCallback(() => {
     logUtil.log(i18n.t("sse.closing"));
@@ -286,7 +290,7 @@ function App() {
       reconnectTimeoutRef.current = null;
     }
     reconnectCountRef.current = 0;
-  }, [i18n, setOfflineTitle]);
+  }, [setOfflineTitle]);
 
   const fetchState = useCallback(async () => {
     try {
@@ -334,7 +338,7 @@ function App() {
       }
       isFetchingRef.current = false;
     }
-  }, [accessToken, authRequired, authSessionReady, i18n, selectedInverterId, useBearerAuth]);
+  }, [accessToken, authRequired, authSessionReady, selectedInverterId, useBearerAuth]);
 
   const loadAuthConfig = useCallback(async () => {
     try {
@@ -421,7 +425,7 @@ function App() {
     } finally {
       setIsAuthChecking(false);
     }
-  }, [authConfigLoaded, authRequired, clearAuthSession, i18n]);
+  }, [authConfigLoaded, authRequired, clearAuthSession]);
 
   const onAuthSuccess = useCallback(async (token: string, refreshToken: string) => {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
@@ -455,7 +459,7 @@ function App() {
       clearAuthSession();
       setIsLoading(false);
     }
-  }, [clearAuthSession, i18n]);
+  }, [clearAuthSession]);
 
   useEffect(() => {
     loadAuthConfig();

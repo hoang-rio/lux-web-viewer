@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } fro
 import Loading from "./Loading";
 import * as logUtil from "../utils/logUtil";
 import { apiFetch, apiGetJsonOrThrow } from "../utils/fetchUtil";
+import i18n from "../i18n";
 
 const SettingsPopover = lazy(() => import("./SettingsPopover"));
 const ModbusDashboard = lazy(() => import("./ModbusDashboard"));
@@ -35,7 +36,7 @@ function SystemInformation({
   isOffline,
   onReconnect,
 }: Props) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<INotificationData[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false); // new state
@@ -65,7 +66,7 @@ function SystemInformation({
     } catch (err) {
       logUtil.error(i18n.t("notification.failedFetchUnreadCount"), err);
     }
-  }, [i18n]);
+  }, []);
 
   useEffect(() => {
     fetchUnreadCount();
@@ -93,7 +94,7 @@ function SystemInformation({
     } finally {
       setLoadingNotifications(false); // end loading
     }
-  }, [i18n]);
+  }, []);
 
   useEffect(() => {
     if (showNotifications) {
@@ -164,7 +165,7 @@ function SystemInformation({
       }
       notificationOpened.current = false;
     }
-  }, [showNotifications, unreadCount, fetchUnreadCount, i18n]);
+  }, [showNotifications, unreadCount, fetchUnreadCount]);
 
   const handleShowNotifications = useCallback(() => {
     setShowNotifications((prev) => !prev);
