@@ -62,6 +62,7 @@ Mỗi quy tắc kích hoạt theo mô hình **Khi → Điều kiện → Hành �
 * **Khi**: Khung thời gian và ngày trong tuần tùy chọn (ví dụ: chỉ từ 08:00–18:00 các ngày trong tuần)
 * **Điều kiện**: Một hoặc nhiều điều kiện phải được đáp ứng (ví dụ: SOC < 30%, công suất PV > 2000W, hoặc giá trị DPS của thiết bị Tuya)
 * **Hành động**: Thực hiện một hoặc nhiều hành động khi tất cả điều kiện được đáp ứng (ví dụ: bật relay, đặt giá trị DPS, hoặc gửi thông báo)
+* **Hành động khi thất bại**: Khi hành động chính là điều khiển thiết bị Tuya, có thể cấu hình một hành động dự phòng chạy khi có điều khiển Tuya thất bại — gửi thông báo hoặc thử lại hành động đó tối đa 10 lần
 
 ### Thiết lập
 1. Chạy tinytuya wizard (`python -m tinytuya wizard`) để khám phá thiết bị Tuya trên mạng và tạo `devices.json`
@@ -73,6 +74,7 @@ Mỗi quy tắc kích hoạt theo mô hình **Khi → Điều kiện → Hành �
 * Điều khiển bất kỳ thiết bị Tuya nào trên mạng cục bộ (bật/tắt, chuyển đổi, đặt giá trị) qua Wi-Fi
 * Điều kiện dựa trên dữ liệu biến tần (SOC, công suất PV, công suất lưới, nhiệt độ pin, v.v.) hoặc giá trị DPS thiết bị Tuya
 * Hỗ trợ nhiều hành động cho mỗi quy tắc kích hoạt
+* Xử lý thất bại khi điều khiển Tuya: gửi thông báo hoặc thử lại hành động bị lỗi (có cấu hình số lần)
 * Thời gian chờ để tránh kích hoạt lặp lại
 * Lịch sử thực hiện với chi tiết hành động (lưu 10 bản ghi gần nhất mỗi quy tắc)
 * Thông báo đẩy qua Firebase Cloud Messaging (FCM)

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { ITrigger, ITriggerCondition, ITriggerAction, ITuyaDevice, IDeviceMapping, ITriggerHistory } from '../../Intefaces';
+import { ITrigger, ITriggerCondition, ITriggerAction, ITuyaDevice, IDeviceMapping, ITriggerHistory, IExecuteFailedAction } from '../../Intefaces';
 import { INVERTER_FIELDS, formatDays, resolveActions } from './constants';
 import { formatServerTimestamp } from '../utils';
 
@@ -69,6 +69,16 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
     return { typeLabel, targetLabel: `${devName}${dpsLabel}` };
   };
 
+  const resolveFailureLabel = (failure: IExecuteFailedAction | null | undefined): string => {
+    if (!failure) return '';
+    if (failure.action_type === 'retry') {
+      return `${t('triggers.actionRetry')} ×${failure.retry_count ?? 3}`;
+    }
+    return failure.notification_title
+      ? `${t('triggers.actionNotification')} → ${failure.notification_title}`
+      : t('triggers.actionNotification');
+  };
+
   const translateHistoryMessage = (msg: string): string => {
     if (!msg) return '';
     const actionMap: Record<string, string> = {
@@ -78,6 +88,7 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
       tuya_set: t('triggers.actionSetValue'),
       notification: t('triggers.actionNotification'),
       play_audio: t('triggers.actionPlayAudio'),
+      retry: t('triggers.actionRetry'),
     };
     return msg.split(',').map((part) => {
       const trimmed = part.trim();
@@ -94,13 +105,17 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
     const isManual = message && message.startsWith('Manual test: ');
     if (!actionsDetail) return translateHistoryMessage(message);
     try {
-      const actions: ITriggerAction[] = JSON.parse(actionsDetail);
-      if (!Array.isArray(actions) || actions.length === 0) return translateHistoryMessage(message);
+      const parsed = JSON.parse(actionsDetail);
+      const actions: ITriggerAction[] = Array.isArray(parsed) ? parsed : (parsed.actions || []);
+      const failure: IExecuteFailedAction | null = Array.isArray(parsed) ? null : (parsed.execute_failed || null);
+      if (actions.length === 0 && !failure) return translateHistoryMessage(message);
       const label = actions.map((a: ITriggerAction) => {
         const { typeLabel, targetLabel } = resolveActionLabel(a);
         return targetLabel ? `${typeLabel} → ${targetLabel}` : typeLabel;
       }).join(' + ');
-      return isManual ? `${t('triggers.manualTestLabel')} ${label}` : label;
+      const failureLabel = failure ? `${t('triggers.onFailed')}: ${resolveFailureLabel(failure)}` : '';
+      const combined = [label, failureLabel].filter(Boolean).join(' · ');
+      return isManual ? `${t('triggers.manualTestLabel')} ${combined}` : combined;
     } catch {
       return translateHistoryMessage(message);
     }
@@ -160,6 +175,12 @@ export default function TriggersTab({ triggers, devices, deviceMappings, onAdd, 
                     );
                   })}
                 </div>
+                {tr.action_params?.execute_failed && (
+                  <div className="trigger-detail failure-detail">
+                    <strong>{t('triggers.onFailed')}:</strong>{' '}
+                    {resolveFailureLabel(tr.action_params.execute_failed)}
+                  </div>
+                )}
                 <div className="trigger-detail">
                   <strong>{t('triggers.cooldown')}:</strong> {tr.cooldown_seconds}s
                 </div>

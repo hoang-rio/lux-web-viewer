@@ -581,6 +581,15 @@
     color: #666;
 }
 
+.failure-action-section {
+    border-color: #f0c36d;
+    background: #fffbf0;
+}
+
+.failure-action-section h4 { color: #8a5a00; }
+
+.failure-detail { color: #8a5a00; }
+
 .form-actions {
     display: flex;
     justify-content: flex-end;
@@ -746,6 +755,9 @@
     .add-condition-btn:hover { background: rgba(77, 163, 255, 0.12); }
     .action-row { border-color: #555; background: #333; }
     .action-row-number { color: #aaa; }
+    .failure-action-section { border-color: #665225; background: #332d1e; }
+    .failure-action-section h4 { color: #f0c36d; }
+    .failure-detail { color: #f0c36d; }
     .add-action-btn { border-color: #4da3ff; color: #4da3ff; }
     .add-action-btn:hover { background: rgba(77, 163, 255, 0.12); }
 

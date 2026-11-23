@@ -62,6 +62,7 @@ Each trigger follows a **When → Conditions → Action** model:
 * **When**: Optional time window and day-of-week filter (e.g. only on weekdays from 08:00–18:00)
 * **Conditions**: One or more conditions that must all be met (e.g. SOC < 30%, PV power > 2000W, or a Tuya device DPS value)
 * **Action**: Execute one or more actions when all conditions are met (e.g. turn on a relay, set a DPS value, or send a push notification)
+* **Execute failed action**: When the main action is a Tuya device control, you can configure one fallback action to run if any Tuya control fails — either send a notification or retry the failed control(s) up to 10 times
 
 ### Setup
 1. Run tinytuya wizard (`python -m tinytuya wizard`) to discover Tuya devices on your network and generate `devices.json`
@@ -73,6 +74,7 @@ Each trigger follows a **When → Conditions → Action** model:
 * Control any local Tuya device (on/off, toggle, set value) via Wi-Fi
 * Conditions based on inverter data (SOC, PV power, grid power, battery temperature, etc.) or Tuya device DPS values
 * Support for multiple actions per trigger
+* Failure handling for Tuya controls: notification or configurable retry of the failed action(s)
 * Cooldown period to prevent rapid re-triggering
 * Execution history with detailed action logs (last 10 per trigger)
 * Push notifications via Firebase Cloud Messaging (FCM)

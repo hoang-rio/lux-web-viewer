@@ -1,7 +1,16 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ITrigger, ITriggerCondition, ITriggerAction, ITuyaDevice, IDeviceMapping } from '../../Intefaces';
-import { INVERTER_FIELDS, CONDITION_OPS, DAY_KEYS, getDeviceDpsList, getActionTypeOptions } from './constants';
+import { ITrigger, ITriggerCondition, ITriggerAction, ITuyaDevice, IDeviceMapping, IExecuteFailedAction } from '../../Intefaces';
+import {
+  INVERTER_FIELDS, CONDITION_OPS, DAY_KEYS, getDeviceDpsList, getActionTypeOptions,
+  getFailureActionTypeOptions, isTuyaDeviceAction, createDefaultExecuteFailed,
+  DEFAULT_RETRY_COUNT, MAX_RETRY_COUNT,
+} from './constants';
+
+type ParamTarget = { kind: 'action'; index: number } | { kind: 'failure' };
+
+const paramTargetKey = (target: ParamTarget): string =>
+  target.kind === 'failure' ? 'failure' : `action-${target.index}`;
 
 interface TriggerFormProps {
   trigger: ITrigger;
@@ -28,43 +37,66 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
     if (!trigger.when_days) return [];
     return trigger.when_days.split(',').map(Number).filter(Boolean);
   });
+  const [executeFailed, setExecuteFailed] = useState<IExecuteFailedAction | null>(() =>
+    isTuyaDeviceAction(actions[0]?.action_type)
+      ? (trigger.action_params?.execute_failed ?? createDefaultExecuteFailed())
+      : null
+  );
   const notifTitleRef = useRef<HTMLInputElement>(null);
   const notifBodyRef = useRef<HTMLTextAreaElement>(null);
-  const [showDescParam, setShowDescParam] = useState<{ actionIdx: number; param: string } | null>(null);
+  const failedNotifTitleRef = useRef<HTMLInputElement>(null);
+  const failedNotifBodyRef = useRef<HTMLTextAreaElement>(null);
+  const [showDescParam, setShowDescParam] = useState<{ target: string; param: string } | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const insertParam = (param: string, actionIdx: number) => {
+  const updateFailedAction = (patch: Partial<IExecuteFailedAction>) => {
+    setExecuteFailed({ ...(executeFailed ?? createDefaultExecuteFailed()), ...patch });
+  };
+
+  const insertParam = (param: string, target: ParamTarget) => {
     const activeEl = document.activeElement;
-    const isTitle = activeEl === notifTitleRef.current;
-    const isBody = activeEl === notifBodyRef.current;
-    if (!isTitle && !isBody) return;
-    const el = activeEl as HTMLInputElement | HTMLTextAreaElement;
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
-    const newVal = el.value.slice(0, start) + param + el.value.slice(end);
-    if (isTitle) {
-      updateActionParams(actionIdx, { notification_title: newVal });
+    let el: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let apply: (value: string) => void = () => {};
+    if (target.kind === 'action') {
+      if (activeEl === notifTitleRef.current) {
+        el = notifTitleRef.current;
+        apply = (value) => updateActionParams(target.index, { notification_title: value });
+      } else if (activeEl === notifBodyRef.current) {
+        el = notifBodyRef.current;
+        apply = (value) => updateActionParams(target.index, { notification_body: value });
+      }
     } else {
-      updateActionParams(actionIdx, { notification_body: newVal });
+      if (activeEl === failedNotifTitleRef.current) {
+        el = failedNotifTitleRef.current;
+        apply = (value) => updateFailedAction({ notification_title: value });
+      } else if (activeEl === failedNotifBodyRef.current) {
+        el = failedNotifBodyRef.current;
+        apply = (value) => updateFailedAction({ notification_body: value });
+      }
     }
+    if (!el) return;
+    const inputEl = el;
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+    apply(inputEl.value.slice(0, start) + param + inputEl.value.slice(end));
     requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + param.length, start + param.length);
+      inputEl.focus();
+      inputEl.setSelectionRange(start + param.length, start + param.length);
     });
   };
 
-  const handleParamClick = (param: string, actionIdx: number) => {
+  const handleParamClick = (param: string, target: ParamTarget) => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     clickTimerRef.current = setTimeout(() => {
-      insertParam(param, actionIdx);
+      insertParam(param, target);
     }, 200);
   };
 
-  const handleParamDoubleClick = (e: React.MouseEvent, param: string, actionIdx: number) => {
+  const handleParamDoubleClick = (e: React.MouseEvent, param: string, target: ParamTarget) => {
     e.preventDefault();
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    const current = showDescParam?.actionIdx === actionIdx && showDescParam?.param === param;
-    setShowDescParam(current ? null : { actionIdx, param });
+    const current = showDescParam?.target === paramTargetKey(target) && showDescParam?.param === param;
+    setShowDescParam(current ? null : { target: paramTargetKey(target), param });
   };
 
   const toggleDay = (day: number) => {
@@ -78,6 +110,12 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
       ...data,
       conditions,
       actions,
+      action_params: {
+        ...(data.action_params || {}),
+        execute_failed: isTuyaDeviceAction(actions[0]?.action_type)
+          ? (executeFailed ?? createDefaultExecuteFailed())
+          : null,
+      },
       when_days: selectedDays.length > 0 ? selectedDays.join(',') : null,
       when_start_time: data.when_start_time || null,
       when_end_time: data.when_end_time || null,
@@ -91,6 +129,25 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
 
   const updateAction = (index: number, patch: Partial<ITriggerAction>) => {
     setActions((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+    if (index === 0 && patch.action_type !== undefined) {
+      setExecuteFailed(
+        isTuyaDeviceAction(patch.action_type)
+          ? (executeFailed ?? createDefaultExecuteFailed())
+          : null
+      );
+    }
+  };
+
+  const removeAction = (index: number) => {
+    const next = actions.filter((_, j) => j !== index);
+    setActions(next);
+    if (index === 0) {
+      setExecuteFailed(
+        isTuyaDeviceAction(next[0]?.action_type)
+          ? (executeFailed ?? createDefaultExecuteFailed())
+          : null
+      );
+    }
   };
 
   const updateActionParams = (index: number, patch: Record<string, unknown>) => {
@@ -397,7 +454,7 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
                       <button
                         type="button"
                         className="remove-btn"
-                        onClick={() => setActions(actions.filter((_, j) => j !== i))}
+                        onClick={() => removeAction(i)}
                       >
                         ×
                       </button>
@@ -455,11 +512,11 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
                               <button
                                 key={p.param}
                                 type="button"
-                                className={`param-tag${showDescParam?.actionIdx === i && showDescParam?.param === p.param ? ' show-desc' : ''}`}
+                                className={`param-tag${showDescParam?.target === `action-${i}` && showDescParam?.param === p.param ? ' show-desc' : ''}`}
                                 title={p.label}
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => handleParamClick(p.param, i)}
-                                onDoubleClick={(e) => { handleParamDoubleClick(e, p.param, i); }}
+                                onClick={() => handleParamClick(p.param, { kind: 'action', index: i })}
+                                onDoubleClick={(e) => { handleParamDoubleClick(e, p.param, { kind: 'action', index: i }); }}
                               >
                                 {p.param}<span className="param-desc">{p.label}</span>
                               </button>
@@ -627,6 +684,83 @@ export default function TriggerForm({ trigger, devices, deviceMappings, castConf
               {t('triggers.addAction')}
             </button>
           </div>
+
+          {isTuyaDeviceAction(actions[0]?.action_type) && (
+            <div className="form-section failure-action-section">
+              <h4>{t('triggers.executeFailedSection')}</h4>
+              <div className="form-group">
+                <label>{t('triggers.failureActionType')}</label>
+                <select
+                  value={executeFailed?.action_type ?? 'notification'}
+                  onChange={(e) => updateFailedAction({ action_type: e.target.value as IExecuteFailedAction['action_type'] })}
+                >
+                  {getFailureActionTypeOptions().map((opt) => (
+                    <option key={opt.value} value={opt.value}>{t(opt.label)}</option>
+                  ))}
+                </select>
+              </div>
+              {executeFailed?.action_type === 'retry' ? (
+                <div className="form-group">
+                  <label>{t('triggers.retryCount')}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_RETRY_COUNT}
+                    value={executeFailed.retry_count ?? DEFAULT_RETRY_COUNT}
+                    onChange={(e) => updateFailedAction({
+                      retry_count: Math.min(MAX_RETRY_COUNT, Math.max(1, parseInt(e.target.value) || 1)),
+                    })}
+                  />
+                  <span className="field-hint">{t('triggers.retryCountHint')}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label>{t('triggers.notifTitle')}</label>
+                    <input
+                      ref={failedNotifTitleRef}
+                      type="text"
+                      value={executeFailed?.notification_title || ''}
+                      onChange={(e) => updateFailedAction({ notification_title: e.target.value })}
+                      placeholder={t('triggers.notifTitlePlaceholder')}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>{t('triggers.notifBody')}</label>
+                    <textarea
+                      ref={failedNotifBodyRef}
+                      value={executeFailed?.notification_body || ''}
+                      onChange={(e) => updateFailedAction({ notification_body: e.target.value })}
+                      placeholder={t('triggers.notifBodyPlaceholder')}
+                      rows={2}
+                    />
+                  </div>
+                  {(() => {
+                    const params = getNotificationParams();
+                    if (params.length === 0) return null;
+                    return (
+                      <div className="notification-params-hint">
+                        <span className="params-label">{t('triggers.paramsHint')}:</span>
+                        {params.map((p) => (
+                          <button
+                            key={p.param}
+                            type="button"
+                            className={`param-tag${showDescParam?.target === 'failure' && showDescParam?.param === p.param ? ' show-desc' : ''}`}
+                            title={p.label}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleParamClick(p.param, { kind: 'failure' })}
+                            onDoubleClick={(e) => { handleParamDoubleClick(e, p.param, { kind: 'failure' }); }}
+                          >
+                            {p.param}<span className="param-desc">{p.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="form-section">
             <div className="form-group">

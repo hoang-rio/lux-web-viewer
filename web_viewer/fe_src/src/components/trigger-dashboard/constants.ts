@@ -1,4 +1,4 @@
-import { IDeviceMapping, ITrigger, ITriggerAction } from '../../Intefaces';
+import { IDeviceMapping, IExecuteFailedAction, ITrigger, ITriggerAction } from '../../Intefaces';
 
 export const INVERTER_FIELDS = [
   { value: 'soc', label: 'triggers.condSOC' },
@@ -15,6 +15,26 @@ export const INVERTER_FIELDS = [
 export const CONDITION_OPS = ['>', '<', '>=', '<=', '==', '!='];
 
 export const DAY_KEYS = ['triggers.dayMon', 'triggers.dayTue', 'triggers.dayWed', 'triggers.dayThu', 'triggers.dayFri', 'triggers.daySat', 'triggers.daySun'];
+
+export const TUYA_ACTION_TYPES = ['tuya_on', 'tuya_off', 'tuya_toggle', 'tuya_set'];
+export const DEFAULT_RETRY_COUNT = 3;
+export const MAX_RETRY_COUNT = 10;
+
+export function isTuyaDeviceAction(actionType: string | undefined | null): boolean {
+  return !!actionType && TUYA_ACTION_TYPES.includes(actionType);
+}
+
+/** The failure action is deliberately restricted to one of these two types. */
+export function getFailureActionTypeOptions(): { value: string; label: string }[] {
+  return [
+    { value: 'notification', label: 'triggers.actionNotification' },
+    { value: 'retry', label: 'triggers.actionRetry' },
+  ];
+}
+
+export function createDefaultExecuteFailed(): IExecuteFailedAction {
+  return { action_type: 'notification', notification_title: '', notification_body: '' };
+}
 
 export function getDeviceDpsList(deviceId: string | null | undefined, mappings: Record<string, IDeviceMapping>): [string, { code: string; type: string; values?: { min?: number; max?: number; range?: string[] } }][] {
   if (!deviceId || !mappings[deviceId]) return [];

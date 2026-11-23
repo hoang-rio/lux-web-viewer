@@ -68,7 +68,11 @@ def save_trigger(data: dict, db_conn) -> dict:
 
     actions = data.get("actions")
     if actions is not None:
-        action_params_payload = {"actions": actions}
+        # Preserve sibling keys (e.g. execute_failed) already stored in action_params
+        existing_params = data.get("action_params")
+        if not isinstance(existing_params, dict):
+            existing_params = {}
+        action_params_payload = {**existing_params, "actions": actions}
         first = actions[0] if actions else {}
         action_type = first.get("action_type", "notification")
         action_device_id = first.get("device_id")

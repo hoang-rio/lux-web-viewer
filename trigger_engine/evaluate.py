@@ -1,7 +1,6 @@
 """Trigger evaluation orchestration (sync loop + async/threaded worker)."""
 
 import asyncio
-import json
 import logging
 import sqlite3
 from datetime import datetime
@@ -54,12 +53,16 @@ def evaluate_triggers(inverter_data: dict, db_conn):
                 "Trigger '%s' (id=%s) conditions met, executing actions: %s",
                 trigger["name"], trigger["id"], action_desc,
             )
+            actions_detail = actions.build_history_detail(trigger, action_list)
             try:
-                actions._execute_actions(trigger, action_list, db_conn, inverter_data)
-                storage.add_trigger_history(trigger["id"], "success", action_desc, db_conn, actions_detail=json.dumps(action_list))
+                success = actions._execute_actions(trigger, action_list, db_conn, inverter_data)
+                if success:
+                    storage.add_trigger_history(trigger["id"], "success", action_desc, db_conn, actions_detail=actions_detail)
+                else:
+                    storage.add_trigger_history(trigger["id"], "error", "Action execution failed", db_conn, actions_detail=actions_detail)
             except Exception as e:
                 logger.error("Failed to execute actions for trigger '%s': %s", trigger["name"], e)
-                storage.add_trigger_history(trigger["id"], "error", str(e), db_conn, actions_detail=json.dumps(action_list))
+                storage.add_trigger_history(trigger["id"], "error", str(e), db_conn, actions_detail=actions_detail)
             storage._update_last_triggered(trigger["id"], now, db_conn)
     except Exception as e:
         logger.error("Error evaluating triggers: %s", e)

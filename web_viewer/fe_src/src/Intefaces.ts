@@ -133,6 +133,15 @@ export interface ITriggerActionParams {
   audio_url?: string;
   audio_repeat?: number;
   audio_wait?: number;
+  execute_failed?: IExecuteFailedAction | null;
+}
+
+/** Single fallback action run when a Tuya device control action fails. */
+export interface IExecuteFailedAction {
+  action_type: 'notification' | 'retry';
+  notification_title?: string;
+  notification_body?: string;
+  retry_count?: number;
 }
 
 export interface ITrigger {

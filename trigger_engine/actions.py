@@ -1,5 +1,6 @@
 """Trigger action execution: Tuya controls, FCM notifications, audio playback."""
 
+import json
 import logging
 from typing import Optional
 
@@ -25,23 +26,115 @@ def _get_actions(trigger: dict) -> list[dict]:
     }]
 
 
-def _execute_actions(trigger: dict, actions: list[dict], db_conn, inverter_data: dict | None = None, is_manual: bool = False):
-    """Execute all actions for a trigger."""
+def _get_execute_failed(trigger: dict) -> Optional[dict]:
+    """Return the configured 'execute failed' action, or None when absent/invalid."""
+    params = trigger.get("action_params") or {}
+    if not isinstance(params, dict):
+        return None
+    config = params.get("execute_failed")
+    if not isinstance(config, dict):
+        return None
+    if config.get("action_type") not in constants.FAILURE_ACTION_TYPES:
+        return None
+    return config
+
+
+def _normalize_retry_count(value) -> int:
+    """Clamp the configured retry count to a safe, non-zero range."""
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        count = constants.DEFAULT_RETRY_COUNT
+    return max(1, min(constants.MAX_RETRY_COUNT, count))
+
+
+def build_history_detail(trigger: dict, actions: list[dict]) -> str:
+    """Serialize executed actions and the optional failure action for history."""
+    detail = {"actions": actions}
+    failure_config = _get_execute_failed(trigger)
+    if failure_config:
+        detail["execute_failed"] = failure_config
+    return json.dumps(detail)
+
+
+def _execute_actions(trigger: dict, actions: list[dict], db_conn, inverter_data: dict | None = None, is_manual: bool = False) -> bool:
+    """Execute all actions, then the failure action if any Tuya control failed.
+
+    Returns True only when every action succeeded (after retries).
+    """
+    other_actions_ok = True
+    failed_tuya_actions: list[dict] = []
     for action in actions:
-        _execute_single_action(trigger, action, db_conn, inverter_data, is_manual=is_manual)
+        ok = _execute_single_action(trigger, action, db_conn, inverter_data, is_manual=is_manual)
+        if action.get("action_type") in constants.TUYA_ACTION_TYPES:
+            if not ok:
+                failed_tuya_actions.append(action)
+        else:
+            other_actions_ok = other_actions_ok and ok
+
+    if not failed_tuya_actions:
+        return other_actions_ok
+
+    failure_config = _get_execute_failed(trigger)
+    if not failure_config:
+        return False
+
+    failure_ok = _execute_failed_action(
+        trigger, failure_config, failed_tuya_actions, db_conn,
+        inverter_data, is_manual=is_manual,
+    )
+    # A successful retry resolves the failure; a notification still records the failed control.
+    if failure_config.get("action_type") == "retry":
+        return other_actions_ok and failure_ok
+    return False
 
 
-def _execute_single_action(trigger: dict, action: dict, db_conn, inverter_data: dict | None = None, is_manual: bool = False):
-    """Execute a single action. Runs tuya commands synchronously."""
+def _execute_failed_action(trigger: dict, config: dict, failed_actions: list[dict], db_conn,
+                           inverter_data: dict | None = None, is_manual: bool = False) -> bool:
+    """Run the single configured failure action for the failed Tuya controls."""
+    action_type = config.get("action_type")
+    if action_type == "notification":
+        _send_notification(trigger, config, db_conn, inverter_data, is_manual=is_manual)
+        return True
+    if action_type == "retry":
+        retry_count = _normalize_retry_count(config.get("retry_count"))
+        all_ok = True
+        for failed_action in failed_actions:
+            ok = False
+            for attempt in range(1, retry_count + 1):
+                ok = _execute_single_action(
+                    trigger, failed_action, db_conn, inverter_data, is_manual=is_manual,
+                )
+                if ok:
+                    logger.info(
+                        "Trigger '%s': retry %s/%s succeeded for action '%s'",
+                        trigger["name"], attempt, retry_count, failed_action.get("action_type"),
+                    )
+                    break
+            if not ok:
+                logger.warning(
+                    "Trigger '%s': all %s retries failed for action '%s'",
+                    trigger["name"], retry_count, failed_action.get("action_type"),
+                )
+            all_ok = all_ok and ok
+        return all_ok
+    return False
+
+
+def _execute_single_action(trigger: dict, action: dict, db_conn, inverter_data: dict | None = None, is_manual: bool = False) -> bool:
+    """Execute a single action. Runs tuya commands synchronously.
+
+    Returns True when the action succeeded, False otherwise.
+    """
     action_type = action.get("action_type", "")
     device_id = action.get("device_id")
     params = action.get("params") or {}
 
     try:
-        if action_type in ("tuya_on", "tuya_off", "tuya_toggle", "tuya_set"):
+        if action_type in constants.TUYA_ACTION_TYPES:
             if not device_id:
                 logger.warning("Trigger '%s' action has no device_id for Tuya action", trigger["name"])
-                return
+                return False
             action_map = {
                 "tuya_on": "turn_on",
                 "tuya_off": "turn_off",
@@ -54,17 +147,28 @@ def _execute_single_action(trigger: dict, action: dict, db_conn, inverter_data: 
             ).fetchone()
             if not row:
                 logger.warning("Trigger '%s': device %s not found", trigger["name"], device_id)
-                return
+                return False
             tuya_action = action_map[action_type]
-            tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params, db_conn)
+            result = tuya_manager._sync_control(row[0], row[1], row[2], tuya_action, row[3], params, db_conn)
+            if isinstance(result, dict) and result.get("error"):
+                logger.warning("Trigger '%s': Tuya action '%s' failed: %s", trigger["name"], action_type, result["error"])
+                return False
+            if not (isinstance(result, dict) and result.get("success") is True):
+                logger.warning("Trigger '%s': unexpected result from Tuya action '%s': %s", trigger["name"], action_type, result)
+                return False
+            return True
         elif action_type == "notification":
             _send_notification(trigger, params, db_conn, inverter_data, is_manual=is_manual)
+            return True
         elif action_type == "play_audio":
             _play_audio(trigger, params)
+            return True
         else:
             logger.warning("Trigger '%s': unknown action_type '%s'", trigger["name"], action_type)
+            return False
     except Exception as e:
         logger.error("Failed to execute action for trigger '%s': %s", trigger["name"], e)
+        return False
 
 
 def _resolve_notification_params(text: str, trigger: dict, inverter_data: dict | None, db_conn) -> str:

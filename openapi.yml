@@ -749,7 +749,7 @@ paths:
                 action_device_id:
                   type: string
                 action_params:
-                  type: object
+                  $ref: "#/components/schemas/TriggerActionParams"
                 cooldown_seconds:
                   type: integer
                   default: 300
@@ -1218,7 +1218,8 @@ components:
           type: string
           nullable: true
         action_params:
-          type: object
+          allOf:
+            - $ref: "#/components/schemas/TriggerActionParams"
           nullable: true
         cooldown_seconds:
           type: integer
@@ -1275,6 +1276,42 @@ components:
           type: string
         params:
           type: object
+
+    TriggerActionParams:
+      type: object
+      description: >
+        Free-form action configuration. `actions` holds the main action list;
+        `execute_failed` configures the single action run when any Tuya device
+        control action fails (only available when the main action is a Tuya control).
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TriggerAction"
+        execute_failed:
+          allOf:
+            - $ref: "#/components/schemas/ExecuteFailedAction"
+          nullable: true
+
+    ExecuteFailedAction:
+      type: object
+      required: [action_type]
+      properties:
+        action_type:
+          type: string
+          enum: [notification, retry]
+          description: >
+            `notification` reuses the existing notification action; `retry`
+            re-runs each failed Tuya action up to `retry_count` extra times.
+        notification_title:
+          type: string
+        notification_body:
+          type: string
+        retry_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
 
   responses:
     Forbidden:
